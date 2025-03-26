@@ -1,0 +1,123 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:free_music_player/models/playlist_provider.dart';
+import 'package:free_music_player/services/theme_service.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
+
+  @override
+  State<StatefulWidget> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  Future<void> requestStoragePermission() async {
+    if (await Permission.manageExternalStorage.isGranted) {
+      // Permission granted, you can proceed to pick the music folder
+      pickMusicFolder();
+    } else {
+      // Request the permission
+      PermissionStatus status =
+          await Permission.manageExternalStorage.request();
+      if (status.isGranted) {
+        // Permission granted, proceed to pick the folder
+        pickMusicFolder();
+      } else {
+        // If permission is denied, handle it here
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Permission to access storage is denied.')),
+        );
+      }
+    }
+  }
+
+  void pickMusicFolder() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      // If folder is selected, update the provider
+      Provider.of<PlaylistProvider>(
+        context,
+        listen: false,
+      ).setMusicDirectory(selectedDirectory);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      appBar: AppBar(title: const Text("Settings")),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.all(25),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Dark Mode",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Consumer<ThemeService>(
+                      builder: (context, themeService, child) {
+                        return CupertinoSwitch(
+                          value: themeService.isDarkMode,
+                          onChanged: (value) => themeService.toggleTheme(),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.all(25),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Music Folder",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Consumer<PlaylistProvider>(
+                      builder: (context, playlistProvider, child) {
+                        return Text(
+                          playlistProvider.musicDirectoryPath.isNotEmpty
+                              ? playlistProvider.musicDirectoryPath
+                              : "No folder selected",
+                          style: const TextStyle(color: Colors.white70),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed:
+                          requestStoragePermission, // Request permission before picking folder
+                      child: const Text("Select Folder"),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
