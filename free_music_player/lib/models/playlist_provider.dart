@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
-import 'package:path/path.dart'; // Import for path manipulation
+import 'package:free_music_player/services/database_service.dart';
+//import 'package:path/path.dart'; // Import for path manipulation
 
 class PlaylistProvider extends ChangeNotifier {
+  final dbService = DatabaseService();
   String _musicDirectoryPath = "";
   List<List<Song>> _songList = []; // Matrix of songs
   final List<String> _playlistNames = [];
@@ -18,7 +20,23 @@ class PlaylistProvider extends ChangeNotifier {
 
   int? _currentSongIndex;
 
+  PlaylistProvider() {
+    initializeMusicDirectory();
+  }
+
+  Future<void> initializeMusicDirectory() async {
+    // Get stored path (or null)
+    String? storedPath = await dbService.getMainFolderPath();
+
+    if (storedPath != null && storedPath.isNotEmpty) {
+      _musicDirectoryPath = storedPath;
+      setSongList(); // or load your playlist logic
+    }
+    notifyListeners();
+  }
+
   void setMusicDirectory(String path) {
+    dbService.storeMainFolderPath(path);
     _musicDirectoryPath = path;
     setSongList(); // Refresh the song list
     notifyListeners(); // Notify listeners of directory change
