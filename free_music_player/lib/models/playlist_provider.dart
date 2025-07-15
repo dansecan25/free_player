@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
@@ -19,9 +20,122 @@ class PlaylistProvider extends ChangeNotifier {
   List<Playlist> get playlists => _playlists;
 
   int? _currentSongIndex;
+  List<Song>? _currentSongList;
 
+  //Audio controls
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  //durations
+  Duration _currentDuration = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+
+  //constructor
   PlaylistProvider() {
     initializeMusicDirectory();
+    listenToDuration();
+  }
+
+  //if not playing
+  bool _isPlaying = false;
+
+  bool get isPlaying => _isPlaying;
+  Duration get currentDuration => _currentDuration;
+  Duration get totalDuration => _totalDuration;
+
+  set currentSongList(List<Song>? newList) {
+    _currentSongList = newList;
+  }
+
+  set currentSongIndex(int? newIndex) {
+    _currentSongIndex = newIndex;
+    if (newIndex != null &&
+        _currentSongList != null &&
+        _currentSongList!.isNotEmpty) {
+      play();
+    }
+
+    notifyListeners();
+  }
+
+  //play the song
+  void play() async {
+    final String path = _currentSongList![_currentSongIndex!].audioPath.path;
+    await _audioPlayer.stop();
+    await _audioPlayer.play(AssetSource(path));
+    _isPlaying = true;
+    notifyListeners();
+  }
+
+  //pause song
+  void pause() async {
+    await _audioPlayer.pause();
+    _isPlaying = false;
+    notifyListeners();
+  }
+
+  //resume song
+  void resume() async {
+    await _audioPlayer.resume();
+    _isPlaying = true;
+    notifyListeners();
+  }
+
+  //pause or resume caller
+  void pauseOrResume() async {
+    if (_isPlaying) {
+      pause();
+    } else {
+      resume();
+    }
+    notifyListeners();
+  }
+
+  //seek
+  void seek(Duration position) async {
+    await _audioPlayer.seek(position);
+  }
+
+  //play next song
+  void playNextSong() {
+    if (_currentSongIndex != null) {
+      if (_currentSongIndex! < _currentSongList!.length - 1) {
+        _currentSongIndex = _currentSongIndex! + 1;
+      } else {
+        _currentSongIndex = 0;
+      }
+    }
+  }
+
+  //previous song
+  void previousSong() async {
+    if (_currentDuration.inSeconds > 2) {
+      seek(Duration.zero);
+    } else {
+      if (_currentSongIndex! > 0) {
+        _currentSongIndex = _currentSongIndex! - 1;
+      } else {
+        _currentSongIndex = _currentSongList!.length - 1;
+      }
+    }
+  }
+
+  //duration listener
+  void listenToDuration() {
+    //tottal duration
+    _audioPlayer.onDurationChanged.listen((newDuration) {
+      _totalDuration = newDuration;
+      notifyListeners();
+    });
+    //current duration
+    _audioPlayer.onPositionChanged.listen((newPosition) {
+      _currentDuration = newPosition;
+      notifyListeners();
+    });
+
+    //listen for song completion
+    _audioPlayer.onPlayerComplete.listen((event) {
+      playNextSong();
+    });
   }
 
   Future<void> initializeMusicDirectory() async {
@@ -92,11 +206,5 @@ class PlaylistProvider extends ChangeNotifier {
   // Helper method to check if a file is a valid music file
   bool _isMusicFile(FileSystemEntity entity) {
     return entity is File && entity.path.endsWith('.mp3');
-  }
-
-  set currentSongIndex(int? newIndex) {
-    _currentSongIndex = newIndex;
-
-    notifyListeners();
   }
 }

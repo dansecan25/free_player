@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class NeuBox extends StatelessWidget {
   final Widget? child;
@@ -6,6 +7,7 @@ class NeuBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    //bool isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,

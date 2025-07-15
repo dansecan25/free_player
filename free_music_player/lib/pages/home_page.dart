@@ -30,6 +30,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void goToSong(Song songObject, int songIndex) {
+    playlistProvider.currentSongList = currentPlaylistSongs;
     playlistProvider.currentSongIndex = songIndex;
     Navigator.push(
       context,
