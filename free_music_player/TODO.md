@@ -1,7 +1,7 @@
 #To add items 1.0.0
 1. Encrypt database data
 2. Play songs [x]
-3. Player on playlists and songs view
+3. Player on playlists and songs view [x]
 4. Obtain author from metadata and image
 5. Keep Playing music on background [x]
 6. Widget with player controls
@@ -11,4 +11,4 @@
 #Release 2.0.0
 1. Change background image 
 2. Store background image path
-3. 
+3. Redesign assets so they look prettier

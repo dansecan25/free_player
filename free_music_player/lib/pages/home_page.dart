@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:free_music_player/components/media_controls.dart';
 import 'package:free_music_player/components/my_drawer.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
@@ -144,7 +145,13 @@ class _HomePageState extends State<HomePage> {
             tooltip: "Refresh playlists",
             child: const Icon(Icons.refresh),
           ),
+          
         ],
+        
+      ),
+      bottomNavigationBar: const Padding(
+        padding: EdgeInsets.all(0.0),
+        child: MediaControls(),
       ),
     );
   }

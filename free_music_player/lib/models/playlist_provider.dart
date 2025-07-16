@@ -98,21 +98,20 @@ class PlaylistProvider extends ChangeNotifier {
 
   //play next song
   void playNextSong() {
-    print("Current song index: ${_currentSongIndex}");
     if (_currentSongIndex != null) {
       if (_currentSongIndex! < _currentSongList!.length - 1) {
         _currentSongIndex = _currentSongIndex! + 1;
-        play();
       } else {
         _currentSongIndex = 0;
       }
+      play();
     }
     notifyListeners();
   }
 
   //previous song
   void previousSong() async {
-    if (_currentDuration.inSeconds > 2) {
+    if (_currentDuration.inSeconds > 5) {
       seek(Duration.zero);
     } else {
       if (_currentSongIndex! > 0) {
@@ -120,6 +119,7 @@ class PlaylistProvider extends ChangeNotifier {
       } else {
         _currentSongIndex = _currentSongList!.length - 1;
       }
+      play();
     }
   }
 
