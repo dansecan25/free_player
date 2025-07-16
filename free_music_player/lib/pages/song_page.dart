@@ -45,33 +45,42 @@ class SongPage extends StatelessWidget {
                         Expanded(
                           child: SizedBox(
                             height: 25, // enough height for Marquee
-                            child: songObject.songName.length > 25
-                                ? Marquee(
-                                    text: songObject.songName,
-                                    scrollAxis: Axis.horizontal,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    blankSpace: 20.0,
-                                    velocity: 30.0,
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold ),
-                                    pauseAfterRound: Duration(seconds: 1),
-                                    startPadding: 10.0,
-                                    accelerationDuration: Duration(seconds: 1),
-                                    accelerationCurve: Curves.linear,
-                                    decelerationDuration: Duration(milliseconds: 500),
-                                    decelerationCurve: Curves.easeOut,
-                                  )
-                                : Text(
-                                    songObject.songName,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 16,fontWeight: FontWeight.bold),
-                                  ),
+                            child:
+                                value.currentSongPlaying.songName.length > 25
+                                    ? Marquee(
+                                      text: value.currentSongPlaying.songName,
+                                      scrollAxis: Axis.horizontal,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      blankSpace: 20.0,
+                                      velocity: 30.0,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      pauseAfterRound: Duration(seconds: 1),
+                                      startPadding: 10.0,
+                                      accelerationDuration: Duration(
+                                        seconds: 1,
+                                      ),
+                                      accelerationCurve: Curves.linear,
+                                      decelerationDuration: Duration(
+                                        milliseconds: 500,
+                                      ),
+                                      decelerationCurve: Curves.easeOut,
+                                    )
+                                    : Text(
+                                      value.currentSongPlaying.songName,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                           ),
                         ),
 
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(Icons.menu),
-                        ),
+                        IconButton(onPressed: () {}, icon: Icon(Icons.menu)),
                       ],
                     ),
 
@@ -92,33 +101,47 @@ class SongPage extends StatelessWidget {
                                 // Wrap with Expanded to handle long titles
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       //Song title
                                       SizedBox(
                                         height: 25,
-                                        child: songObject.songName.length > 25
-                                            ? Marquee(
-                                                text: songObject.songName,
-                                                scrollAxis: Axis.horizontal,
-                                                blankSpace: 20.0,
-                                                velocity: 30.0,
-                                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold ),
-                                                pauseAfterRound: Duration(seconds: 1),
-                                                startPadding: 10.0,
-                                                accelerationDuration: Duration(seconds: 1),
-                                                accelerationCurve: Curves.linear,
-                                                decelerationDuration: Duration(milliseconds: 500),
-                                                decelerationCurve: Curves.easeOut,
-                                              )
-                                            : Text(
-                                                songObject.songName,
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 20,
+                                        child:
+                                            value.currentSongPlaying.songName.length > 25
+                                                ? Marquee(
+                                                  text: value.currentSongPlaying.songName,
+                                                  scrollAxis: Axis.horizontal,
+                                                  blankSpace: 20.0,
+                                                  velocity: 30.0,
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                  pauseAfterRound: Duration(
+                                                    seconds: 1,
+                                                  ),
+                                                  startPadding: 10.0,
+                                                  accelerationDuration:
+                                                      Duration(seconds: 1),
+                                                  accelerationCurve:
+                                                      Curves.linear,
+                                                  decelerationDuration:
+                                                      Duration(
+                                                        milliseconds: 500,
+                                                      ),
+                                                  decelerationCurve:
+                                                      Curves.easeOut,
+                                                )
+                                                : Text(
+                                                  value.currentSongPlaying.songName,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 20,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
                                       ),
                                       //Artist name
                                       Text(songObject.artistName),
@@ -128,8 +151,7 @@ class SongPage extends StatelessWidget {
                               ],
                             ),
                           ),
-
-                          ],
+                        ],
                       ),
                     ),
 

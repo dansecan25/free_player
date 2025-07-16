@@ -41,6 +41,7 @@ class PlaylistProvider extends ChangeNotifier {
   bool get isPlaying => _isPlaying;
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
+  Song get currentSongPlaying => _currentSongList![_currentSongIndex!];
 
   set currentSongList(List<Song>? newList) {
     _currentSongList = newList;
@@ -61,7 +62,7 @@ class PlaylistProvider extends ChangeNotifier {
   void play() async {
     final String path = _currentSongList![_currentSongIndex!].audioPath.path;
     await _audioPlayer.stop();
-    await _audioPlayer.play(AssetSource(path));
+    await _audioPlayer.play(DeviceFileSource(path));
     _isPlaying = true;
     notifyListeners();
   }
@@ -97,13 +98,16 @@ class PlaylistProvider extends ChangeNotifier {
 
   //play next song
   void playNextSong() {
+    print("Current song index: ${_currentSongIndex}");
     if (_currentSongIndex != null) {
       if (_currentSongIndex! < _currentSongList!.length - 1) {
         _currentSongIndex = _currentSongIndex! + 1;
+        play();
       } else {
         _currentSongIndex = 0;
       }
     }
+    notifyListeners();
   }
 
   //previous song
