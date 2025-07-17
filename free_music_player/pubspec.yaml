@@ -40,6 +40,9 @@ dependencies:
   sqflite: ^2.4.2
   audioplayers: ^6.5.0
   marquee: ^2.3.0
+  just_audio: ^0.10.4
+  audio_service: ^0.18.18
+  audio_session: ^0.2.2
 
 dev_dependencies:
   flutter_test:

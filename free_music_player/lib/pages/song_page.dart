@@ -46,9 +46,9 @@ class SongPage extends StatelessWidget {
                           child: SizedBox(
                             height: 25, // enough height for Marquee
                             child:
-                                value.currentSongPlaying.songName.length > 25
+                                value.currentSongPlaying!.songName.length > 25
                                     ? Marquee(
-                                      text: value.currentSongPlaying.songName,
+                                      text: value.currentSongPlaying!.songName,
                                       scrollAxis: Axis.horizontal,
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -70,7 +70,7 @@ class SongPage extends StatelessWidget {
                                       decelerationCurve: Curves.easeOut,
                                     )
                                     : Text(
-                                      value.currentSongPlaying.songName,
+                                      value.currentSongPlaying!.songName,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         fontSize: 16,
@@ -108,9 +108,9 @@ class SongPage extends StatelessWidget {
                                       SizedBox(
                                         height: 25,
                                         child:
-                                            value.currentSongPlaying.songName.length > 25
+                                            value.currentSongPlaying!.songName.length > 25
                                                 ? Marquee(
-                                                  text: value.currentSongPlaying.songName,
+                                                  text: value.currentSongPlaying!.songName,
                                                   scrollAxis: Axis.horizontal,
                                                   blankSpace: 20.0,
                                                   velocity: 30.0,
@@ -134,7 +134,7 @@ class SongPage extends StatelessWidget {
                                                       Curves.easeOut,
                                                 )
                                                 : Text(
-                                                  value.currentSongPlaying.songName,
+                                                  value.currentSongPlaying!.songName,
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 20,

@@ -24,33 +24,44 @@ class MediaControls extends StatelessWidget {
                   Expanded(
                     child: SizedBox(
                       height: 35,
-                      child: value.currentSongPlaying.songName.length > 25
-                          ? Marquee(
-                              text: value.currentSongPlaying.songName,
-                              scrollAxis: Axis.horizontal,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              blankSpace: 20.0,
-                              velocity: 30.0,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              pauseAfterRound: Duration(seconds: 1),
-                              startPadding: 10.0,
-                              accelerationDuration: Duration(seconds: 1),
-                              accelerationCurve: Curves.linear,
-                              decelerationDuration:
-                                  Duration(milliseconds: 500),
-                              decelerationCurve: Curves.easeOut,
-                            )
-                          : Text(
-                              value.currentSongPlaying.songName,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                      child: value.currentSongPlaying != null ?
+                      value.currentSongPlaying!.songName.length > 25
+                            ? Marquee(
+                                text: value.currentSongPlaying!.songName,
+                                scrollAxis: Axis.horizontal,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                blankSpace: 20.0,
+                                velocity: 30.0,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                pauseAfterRound: Duration(seconds: 1),
+                                startPadding: 10.0,
+                                accelerationDuration: Duration(seconds: 1),
+                                accelerationCurve: Curves.linear,
+                                decelerationDuration:
+                                    Duration(milliseconds: 500),
+                                decelerationCurve: Curves.easeOut,
+                              )
+                            : Text(
+                                value.currentSongPlaying!.songName,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                    : 
+                      Text(
+                          "--------",
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    
                     ),
                   ),
                 ],

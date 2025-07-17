@@ -1,47 +1,48 @@
 import 'dart:io';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/services/database_service.dart';
-//import 'package:path/path.dart'; // Import for path manipulation
 
 class PlaylistProvider extends ChangeNotifier {
   final dbService = DatabaseService();
   String _musicDirectoryPath = "";
-  List<List<Song>> _songList = []; // Matrix of songs
+  List<List<Song>> _songList = [];
   final List<String> _playlistNames = [];
   List<Playlist> _playlists = [];
-  List<Directory> _playlistPaths = []; // Make this list of Directory type
+  List<Directory> _playlistPaths = [];
 
   String get musicDirectoryPath => _musicDirectoryPath;
-  List<List<Song>> get songList => _songList; // Returning a matrix of songs
+  List<List<Song>> get songList => _songList;
   List<String> get playlistNames => _playlistNames;
   List<Playlist> get playlists => _playlists;
 
   int? _currentSongIndex;
   List<Song>? _currentSongList;
 
-  //Audio controls
+  final AudioHandler audioHandler;
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  //durations
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
 
-  //constructor
-  PlaylistProvider() {
-    initializeMusicDirectory();
-    listenToDuration();
-  }
-
-  //if not playing
   bool _isPlaying = false;
+
+  PlaylistProvider(this.audioHandler) {
+    initializeMusicDirectory();
+    _listenToDuration();
+  }
 
   bool get isPlaying => _isPlaying;
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
-  Song get currentSongPlaying => _currentSongList![_currentSongIndex!];
+
+  Song? get currentSongPlaying =>
+      _currentSongList != null && _currentSongIndex != null
+          ? _currentSongList![_currentSongIndex!]
+          : null;
 
   set currentSongList(List<Song>? newList) {
     _currentSongList = newList;
@@ -54,101 +55,110 @@ class PlaylistProvider extends ChangeNotifier {
         _currentSongList!.isNotEmpty) {
       play();
     }
-
     notifyListeners();
   }
 
-  //play the song
-  void play() async {
+  Future<void> play() async {
     final String path = _currentSongList![_currentSongIndex!].audioPath.path;
-    await _audioPlayer.stop();
-    await _audioPlayer.play(DeviceFileSource(path));
-    _isPlaying = true;
+    try {
+      await _audioPlayer.setFilePath(path);
+      await _audioPlayer.play();
+      _isPlaying = true;
+
+      // Update audio_service metadata
+      final song = _currentSongList![_currentSongIndex!];
+      audioHandler.playMediaItem(
+        MediaItem(
+          id: song.audioPath.path,
+          title: song.songName,
+          artist: song.artistName,
+          album: "Unknown Album",
+          duration: _audioPlayer.duration,
+        ),
+      );
+
+    } catch (e) {
+      print("Error playing song: $e");
+    }
     notifyListeners();
   }
 
-  //pause song
-  void pause() async {
+  Future<void> pause() async {
     await _audioPlayer.pause();
     _isPlaying = false;
     notifyListeners();
   }
 
-  //resume song
-  void resume() async {
-    await _audioPlayer.resume();
+  Future<void> resume() async {
+    await _audioPlayer.play();
     _isPlaying = true;
     notifyListeners();
   }
 
-  //pause or resume caller
-  void pauseOrResume() async {
+  Future<void> pauseOrResume() async {
     if (_isPlaying) {
-      pause();
+      await pause();
     } else {
-      resume();
+      await resume();
     }
     notifyListeners();
   }
 
-  //seek
-  void seek(Duration position) async {
+  Future<void> seek(Duration position) async {
     await _audioPlayer.seek(position);
   }
 
-  //play next song
-  void playNextSong() {
+  Future<void> playNextSong() async {
     if (_currentSongIndex != null) {
       if (_currentSongIndex! < _currentSongList!.length - 1) {
         _currentSongIndex = _currentSongIndex! + 1;
       } else {
         _currentSongIndex = 0;
       }
-      play();
+      await play();
     }
     notifyListeners();
   }
 
-  //previous song
-  void previousSong() async {
+  Future<void> previousSong() async {
     if (_currentDuration.inSeconds > 5) {
-      seek(Duration.zero);
+      await seek(Duration.zero);
     } else {
       if (_currentSongIndex! > 0) {
         _currentSongIndex = _currentSongIndex! - 1;
       } else {
         _currentSongIndex = _currentSongList!.length - 1;
       }
-      play();
+      await play();
     }
   }
 
-  //duration listener
-  void listenToDuration() {
-    //tottal duration
-    _audioPlayer.onDurationChanged.listen((newDuration) {
-      _totalDuration = newDuration;
-      notifyListeners();
+  void _listenToDuration() {
+    _audioPlayer.durationStream.listen((newDuration) {
+      if (newDuration != null) {
+        _totalDuration = newDuration;
+        notifyListeners();
+      }
     });
-    //current duration
-    _audioPlayer.onPositionChanged.listen((newPosition) {
+
+    _audioPlayer.positionStream.listen((newPosition) {
       _currentDuration = newPosition;
       notifyListeners();
     });
 
-    //listen for song completion
-    _audioPlayer.onPlayerComplete.listen((event) {
-      playNextSong();
+    _audioPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        playNextSong();
+      }
     });
   }
 
   Future<void> initializeMusicDirectory() async {
-    // Get stored path (or null)
     String? storedPath = await dbService.getMainFolderPath();
 
     if (storedPath != null && storedPath.isNotEmpty) {
       _musicDirectoryPath = storedPath;
-      setSongList(); // or load your playlist logic
+      setSongList();
     }
     notifyListeners();
   }
@@ -156,58 +166,53 @@ class PlaylistProvider extends ChangeNotifier {
   void setMusicDirectory(String path) {
     dbService.storeMainFolderPath(path);
     _musicDirectoryPath = path;
-    setSongList(); // Refresh the song list
-    notifyListeners(); // Notify listeners of directory change
+    setSongList();
+    notifyListeners();
   }
 
   void setSongList() async {
     if (_musicDirectoryPath.isEmpty) return;
 
     Directory musicDir = Directory(_musicDirectoryPath);
-    if (!musicDir.existsSync()) {
-      return;
-    }
+    if (!musicDir.existsSync()) return;
 
-    _songList = []; //Cant use clear since the types is not valid
-    _playlistNames.clear(); // Clear previous playlist names
-    _playlistPaths = []; // cant also use clear for the same reason
+    _songList = [];
+    _playlistNames.clear();
+    _playlistPaths = [];
     _playlists.clear();
 
     List<FileSystemEntity> entities = musicDir.listSync();
 
     for (var entity in entities) {
       if (entity is Directory) {
-        // Add playlist name and path
         String name = entity.path.split(Platform.pathSeparator).last;
         List<Song> songs = _setSongsForPlaylist(name, entity);
         playlists.add(Playlist(playlistName: name, playlistSongs: songs));
-        _playlistNames.add(entity.path.split(Platform.pathSeparator).last);
+        _playlistNames.add(name);
         _playlistPaths.add(entity);
       }
     }
-    notifyListeners(); // Notify UI of changes
+    notifyListeners();
   }
 
   List<Song> _setSongsForPlaylist(String name, Directory path) {
     List<Song> songs = [];
-    Directory playlistDir = path;
-    List<FileSystemEntity> entities = playlistDir.listSync();
+    List<FileSystemEntity> entities = path.listSync();
     for (var entity in entities) {
-      Song songFile = Song(
-        albumArtImagePath: "none",
-        songName: (entity.path.split(Platform.pathSeparator).last).replaceAll(
-          '.mp3',
-          '',
-        ),
-        audioPath: entity,
-        artistName: "Unknown artist",
-      );
-      songs.add(songFile);
+      if (_isMusicFile(entity)) {
+        Song songFile = Song(
+          albumArtImagePath: "none",
+          songName: (entity.path.split(Platform.pathSeparator).last)
+              .replaceAll('.mp3', ''),
+          audioPath: entity,
+          artistName: "Unknown artist",
+        );
+        songs.add(songFile);
+      }
     }
     return songs;
   }
 
-  // Helper method to check if a file is a valid music file
   bool _isMusicFile(FileSystemEntity entity) {
     return entity is File && entity.path.endsWith('.mp3');
   }
