@@ -203,7 +203,7 @@ class SongPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 20),
-                        Expanded(
+                        Expanded( //play 
                           flex: 2,
                           child: GestureDetector(
                             onTap: value.pauseOrResume,

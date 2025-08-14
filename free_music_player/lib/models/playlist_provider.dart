@@ -28,14 +28,15 @@ class PlaylistProvider extends ChangeNotifier {
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
 
-  bool _isPlaying = false;
+  
 
   PlaylistProvider(this.audioHandler) {
     initializeMusicDirectory();
     _listenToDuration();
   }
 
-  bool get isPlaying => _isPlaying;
+  bool get isPlaying => _audioPlayer.playerState.playing;
+
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
 
@@ -63,7 +64,6 @@ class PlaylistProvider extends ChangeNotifier {
     try {
       await _audioPlayer.setFilePath(path);
       await _audioPlayer.play();
-      _isPlaying = true;
 
       // Update audio_service metadata
       final song = _currentSongList![_currentSongIndex!];
@@ -85,23 +85,21 @@ class PlaylistProvider extends ChangeNotifier {
 
   Future<void> pause() async {
     await _audioPlayer.pause();
-    _isPlaying = false;
     notifyListeners();
   }
 
   Future<void> resume() async {
     await _audioPlayer.play();
-    _isPlaying = true;
     notifyListeners();
   }
 
   Future<void> pauseOrResume() async {
-    if (_isPlaying) {
-      await pause();
+    if (_audioPlayer.playing) {
+      await _audioPlayer.pause();
     } else {
-      await resume();
+      await _audioPlayer.play();
     }
-    notifyListeners();
+    notifyListeners(); // so UI rebuilds immediately
   }
 
   Future<void> seek(Duration position) async {
