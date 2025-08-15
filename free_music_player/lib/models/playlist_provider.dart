@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/services/database_service.dart';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 class PlaylistProvider extends ChangeNotifier {
   final dbService = DatabaseService();
@@ -184,7 +185,7 @@ class PlaylistProvider extends ChangeNotifier {
     for (var entity in entities) {
       if (entity is Directory) {
         String name = entity.path.split(Platform.pathSeparator).last;
-        List<Song> songs = _setSongsForPlaylist(name, entity);
+        List<Song> songs = await _setSongsForPlaylist(name, entity);
         playlists.add(Playlist(playlistName: name, playlistSongs: songs));
         _playlistNames.add(name);
         _playlistPaths.add(entity);
@@ -193,23 +194,40 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Song> _setSongsForPlaylist(String name, Directory path) {
+  Future<List<Song>> _setSongsForPlaylist(String name, Directory path) async {
     List<Song> songs = [];
     List<FileSystemEntity> entities = path.listSync();
+
     for (var entity in entities) {
       if (_isMusicFile(entity)) {
-        Song songFile = Song(
-          albumArtImagePath: "none",
-          songName: (entity.path.split(Platform.pathSeparator).last)
-              .replaceAll('.mp3', ''),
-          audioPath: entity,
-          artistName: "Unknown artist",
-        );
-        songs.add(songFile);
+        try {
+          final metadata = readMetadata(File(entity.path), getImage: false);
+          
+          // Only pull the author
+          String artistName = "Unknown artist";
+          
+          artistName = metadata.artist?.isNotEmpty == true
+              ? metadata.artist!
+              : "Unknown artist";
+            
+          Song songFile = Song(
+            albumArtImagePath: "none",
+            songName: (entity.path.split(Platform.pathSeparator).last)
+                .replaceAll('.mp3', ''),
+            audioPath: entity,
+            artistName: artistName,
+          );
+
+          songs.add(songFile);
+        } catch (e) {
+          print("Error reading metadata for ${entity.path}: $e");
+        }
       }
     }
     return songs;
   }
+
+
 
   bool _isMusicFile(FileSystemEntity entity) {
     return entity is File && entity.path.endsWith('.mp3');
