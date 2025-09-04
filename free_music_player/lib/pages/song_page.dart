@@ -1,3 +1,4 @@
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/components/neu_box.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
@@ -144,7 +145,7 @@ class SongPage extends StatelessWidget {
                                                 ),
                                       ),
                                       //Artist name
-                                      Text(songObject.artistName),
+                                      Text(value.currentSongPlaying!.artistName),
                                     ],
                                   ),
                                 ),
@@ -156,46 +157,40 @@ class SongPage extends StatelessWidget {
                     ),
 
                     //NeuBox(child: Image.asset("png path")),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 25),//below, the slider and timestamps
                     Column(
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 25.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(formatTime(value.currentDuration)),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 25.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Current position
+                                Text(formatTime(value.currentDuration)),
 
-                              Icon(Icons.shuffle),
+                                Icon(Icons.shuffle),
+                                Icon(Icons.repeat),
 
-                              Icon(Icons.repeat),
-
-                              Text(formatTime(value.totalDuration)),
-                            ],
-                          ),
-                        ),
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 0,
+                                // Total duration
+                                // Total duration text
+                                Text(formatTime(value.totalDuration))
+                              ],
                             ),
                           ),
-                          child: Slider(
-                            min: 0,
-                            max: value.totalDuration.inSeconds.toDouble(),
-                            value: value.currentDuration.inSeconds.toDouble(),
-                            activeColor: const Color.fromARGB(255, 0, 103, 187),
-                            onChanged: (double double) {},
-                            onChangeEnd: (double double) {
-                              value.seek(Duration(seconds: double.toInt()));
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                          // Slider
+                          Slider(
+                              min: 0,
+                              max: value.totalDuration.inSeconds.toDouble(),
+                              value: value.currentDuration.inSeconds.toDouble(),
+                              onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
+                            )
+                          ],
+                      ),
+
+                    const SizedBox(height: 10),//below, play pause skip rewind buttons
                     Row(
                       children: [
+                        // Previous song button
                         Expanded(
                           child: GestureDetector(
                             onTap: value.previousSong,
@@ -203,20 +198,29 @@ class SongPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 20),
-                        Expanded( //play 
+
+                        // Play / Pause button
+                        Expanded(
                           flex: 2,
-                          child: GestureDetector(
-                            onTap: value.pauseOrResume,
-                            child: NeuBox(
-                              child: Icon(
-                                value.isPlaying
-                                    ? Icons.pause
-                                    : Icons.play_arrow,
-                              ),
-                            ),
+                          child: StreamBuilder<PlaybackState>(
+                            stream: value.audioHandler.playbackState,
+                            builder: (context, snapshot) {
+                              final playing = snapshot.data?.playing ?? false;
+
+                              return GestureDetector(
+                                onTap: () => value.pauseOrResume(),
+                                child: NeuBox(
+                                  child: Icon(
+                                    playing ? Icons.pause : Icons.play_arrow,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(width: 20),
+
+                        // Next song button
                         Expanded(
                           child: GestureDetector(
                             onTap: value.playNextSong,
@@ -224,8 +228,9 @@ class SongPage extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                  ],
+                    )
+
+                    ],
                 ),
               ),
             ),

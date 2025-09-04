@@ -2,7 +2,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
-  final _player = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer();
+  AudioPlayer get player => _player;
 
   AudioPlayerHandler() {
     _notifyAudioHandlerAboutPlaybackEvents();
@@ -26,6 +27,13 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void> setAudioSource(AudioSource source) async {
     await _player.setAudioSource(source);
+  }
+
+  Future<void> setMediaItem(MediaItem item, {AudioSource? source}) async {
+    if (source != null) {
+      await _player.setAudioSource(source);
+    }
+    mediaItem.add(item); // updates Android/iOS notification & lockscreen
   }
 
   @override

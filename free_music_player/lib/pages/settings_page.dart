@@ -15,20 +15,25 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   Future<void> requestStoragePermission() async {
-    if (await Permission.manageExternalStorage.isGranted) {
-      // Permission granted, you can proceed to pick the music folder
+    if (await Permission.manageExternalStorage.isGranted || 
+        await Permission.audio.isGranted) {
+      // Permission granted, proceed to pick the music folder
       pickMusicFolder();
     } else {
-      // Request the permission
-      PermissionStatus status =
-          await Permission.manageExternalStorage.request();
-      if (status.isGranted) {
-        // Permission granted, proceed to pick the folder
+      // Request both permissions
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.manageExternalStorage,
+        Permission.audio,
+      ].request();
+
+      if ((statuses[Permission.manageExternalStorage]?.isGranted ?? false) ||
+          (statuses[Permission.audio]?.isGranted ?? false)) {
+        // At least one required permission granted
         pickMusicFolder();
       } else {
-        // If permission is denied, handle it here
+        // If permissions are denied, handle it here
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Permission to access storage is denied.')),
+          const SnackBar(content: Text('Permission to access storage is denied.')),
         );
       }
     }

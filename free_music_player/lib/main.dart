@@ -7,6 +7,7 @@ import 'package:free_music_player/models/playlist_provider.dart'; // Import Play
 import 'package:provider/provider.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
   final audioHandler = await AudioService.init(
     builder: () => AudioPlayerHandler(),

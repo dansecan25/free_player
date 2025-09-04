@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
+import 'package:free_music_player/services/audio_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
@@ -23,8 +24,9 @@ class PlaylistProvider extends ChangeNotifier {
   int? _currentSongIndex;
   List<Song>? _currentSongList;
 
-  final AudioHandler audioHandler;
+  final AudioPlayerHandler audioHandler;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  AudioPlayer get audioPlayer => _audioPlayer;
 
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
@@ -36,7 +38,7 @@ class PlaylistProvider extends ChangeNotifier {
     _listenToDuration();
   }
 
-  bool get isPlaying => _audioPlayer.playerState.playing;
+  bool get isPlaying => audioHandler.playbackState.value.playing;
 
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
@@ -61,22 +63,29 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   Future<void> play() async {
-    final String path = _currentSongList![_currentSongIndex!].audioPath.path;
+    //final String path = _currentSongList![_currentSongIndex!].audioPath.path;
+    final song = _currentSongList![_currentSongIndex!];
+    final String path = song.audioPath.path;
     try {
-      await _audioPlayer.setFilePath(path);
-      await _audioPlayer.play();
+      //await _audioPlayer.setFilePath(path);
+      //await _audioPlayer.play();
 
       // Update audio_service metadata
-      final song = _currentSongList![_currentSongIndex!];
-      audioHandler.playMediaItem(
+      // Set the MediaItem and audio source
+      await audioHandler.setMediaItem(
         MediaItem(
-          id: song.audioPath.path,
+          id: path,
           title: song.songName,
           artist: song.artistName,
           album: "Unknown Album",
-          duration: _audioPlayer.duration,
+          duration: await audioHandler.player.setAudioSource(
+            AudioSource.uri(Uri.file(path))
+          ).then((_) => audioHandler.player.duration ?? Duration.zero),
         ),
       );
+
+
+      await audioHandler.play();
 
     } catch (e) {
       print("Error playing song: $e");
@@ -85,26 +94,26 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   Future<void> pause() async {
-    await _audioPlayer.pause();
+    await audioHandler.pause();
     notifyListeners();
   }
 
   Future<void> resume() async {
-    await _audioPlayer.play();
+    await audioHandler.play();
     notifyListeners();
   }
 
   Future<void> pauseOrResume() async {
-    if (_audioPlayer.playing) {
-      await _audioPlayer.pause();
+    if (audioHandler.playbackState.value.playing) {
+      await audioHandler.pause();
     } else {
-      await _audioPlayer.play();
+      await audioHandler.play();
     }
     notifyListeners(); // so UI rebuilds immediately
   }
 
   Future<void> seek(Duration position) async {
-    await _audioPlayer.seek(position);
+    await audioHandler.seek(position);
   }
 
   Future<void> playNextSong() async {
@@ -133,19 +142,22 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   void _listenToDuration() {
-    _audioPlayer.durationStream.listen((newDuration) {
-      if (newDuration != null) {
-        _totalDuration = newDuration;
-        notifyListeners();
-      }
+    final player = audioHandler.player; 
+
+    // Total duration
+    player.durationStream.listen((newDuration) {
+      this._totalDuration = player.duration ?? Duration.zero;
+      notifyListeners();
     });
 
-    _audioPlayer.positionStream.listen((newPosition) {
+    // Current position
+    player.positionStream.listen((newPosition) {
       _currentDuration = newPosition;
       notifyListeners();
     });
 
-    _audioPlayer.playerStateStream.listen((state) {
+    // Listen to end of song
+    player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         playNextSong();
       }
