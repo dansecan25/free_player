@@ -1,9 +1,11 @@
 import 'package:audio_service/audio_service.dart';
+import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:just_audio/just_audio.dart';
 
 class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   AudioPlayer get player => _player;
+  PlaylistProvider? playlistProvider;
 
   AudioPlayerHandler() {
     _notifyAudioHandlerAboutPlaybackEvents();
@@ -40,6 +42,9 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     });
   }
 
+  void setPlaylistProvider(PlaylistProvider playlistProvider){
+    this.playlistProvider=playlistProvider;
+  }
 
   Future<void> setAudioSource(AudioSource source) async {
     await _player.setAudioSource(source);
@@ -69,11 +74,11 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> skipToNext() async {
-    await _player.seekToNext();
+    await playlistProvider?.playNextSong();
   }
 
   @override
   Future<void> skipToPrevious() async {
-    await _player.seekToPrevious();
+    await playlistProvider?.previousSong();
   }
 }

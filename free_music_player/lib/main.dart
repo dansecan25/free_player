@@ -17,14 +17,17 @@ void main() async {
       androidNotificationOngoing: true,
     ),
   );
+  final playlistProvider = PlaylistProvider(audioHandler);
+
+  // Now inject the provider into the handler
+  audioHandler.setPlaylistProvider(playlistProvider);
+
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => ThemeService()),
-        ChangeNotifierProvider(
-          create: (context) => PlaylistProvider(audioHandler),
-        ), // Add PlaylistProvider
+        ChangeNotifierProvider.value(value: playlistProvider),
       ],
       child: const MyApp(),
     ),
