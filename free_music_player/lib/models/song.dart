@@ -1,15 +1,16 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 class Song {
   final String songName;
   final String artistName;
-  final String albumArtImagePath;
+  final Uint8List? albumArtImagePathBytes;
   final FileSystemEntity audioPath;
 
   Song({
     required this.songName,
     required this.artistName,
-    required this.albumArtImagePath,
+    required this.albumArtImagePathBytes,
     required this.audioPath,
   });
 }

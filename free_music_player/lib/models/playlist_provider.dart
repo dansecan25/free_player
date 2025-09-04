@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
+import 'package:dart_tags/dart_tags.dart';
 import 'package:free_music_player/services/audio_handler.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
@@ -214,16 +216,18 @@ class PlaylistProvider extends ChangeNotifier {
       if (_isMusicFile(entity)) {
         try {
           final metadata = readMetadata(File(entity.path), getImage: false);
-          
+
           // Only pull the author
-          String artistName = "Unknown artist";
-          
-          artistName = metadata.artist?.isNotEmpty == true
+          String artistName = metadata.artist?.isNotEmpty == true
               ? metadata.artist!
               : "Unknown artist";
-            
+
+          // Pull album art
+          Uint8List? albumArtBytes;
+
+
           Song songFile = Song(
-            albumArtImagePath: "none",
+            albumArtImagePathBytes: null,
             songName: (entity.path.split(Platform.pathSeparator).last)
                 .replaceAll('.mp3', ''),
             audioPath: entity,
@@ -236,9 +240,9 @@ class PlaylistProvider extends ChangeNotifier {
         }
       }
     }
+
     return songs;
   }
-
 
 
   bool _isMusicFile(FileSystemEntity entity) {
