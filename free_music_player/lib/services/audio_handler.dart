@@ -11,19 +11,35 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
 
   void _notifyAudioHandlerAboutPlaybackEvents() {
     _player.playbackEventStream.listen((event) {
+      final playing = _player.playing;
+
       playbackState.add(playbackState.value.copyWith(
         controls: [
           MediaControl.skipToPrevious,
-          _player.playing ? MediaControl.pause : MediaControl.play,
+          playing ? MediaControl.pause : MediaControl.play,
           MediaControl.skipToNext,
         ],
-        playing: _player.playing,
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+        },
+        androidCompactActionIndices: const [0, 1, 2],
+        playing: playing,
         updatePosition: _player.position,
         bufferedPosition: _player.bufferedPosition,
+        processingState: {
+          ProcessingState.idle: AudioProcessingState.idle,
+          ProcessingState.loading: AudioProcessingState.loading,
+          ProcessingState.buffering: AudioProcessingState.buffering,
+          ProcessingState.ready: AudioProcessingState.ready,
+          ProcessingState.completed: AudioProcessingState.completed,
+        }[_player.processingState]!,
         speed: _player.speed,
       ));
     });
   }
+
 
   Future<void> setAudioSource(AudioSource source) async {
     await _player.setAudioSource(source);
@@ -37,7 +53,10 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() {
+    print("Play button pressed from notification");
+    return _player.play();
+  }
 
   @override
   Future<void> pause() => _player.pause();
