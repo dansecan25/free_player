@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:free_music_player/pages/home_page.dart';
 import 'package:free_music_player/services/audio_handler.dart';
 import 'package:free_music_player/services/theme_service.dart';
-import 'package:free_music_player/models/playlist_provider.dart'; // Import PlaylistProvider
+import 'package:free_music_player/models/playlist_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+
+  // Request MANAGE_EXTERNAL_STORAGE permission on Android 11+
+  if (await Permission.manageExternalStorage.isDenied) {
+    await Permission.manageExternalStorage.request();
+  }
 
   final audioHandler = await AudioService.init(
     builder: () => AudioPlayerHandler(),

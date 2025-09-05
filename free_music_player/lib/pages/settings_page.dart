@@ -14,35 +14,39 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
+  /// Request storage permission if not granted, then pick folder
   Future<void> requestStoragePermission() async {
-    if (await Permission.manageExternalStorage.isGranted || 
-        await Permission.audio.isGranted) {
-      // Permission granted, proceed to pick the music folder
+    final hasStoragePermission = await Permission.manageExternalStorage.isGranted ||
+        await Permission.audio.isGranted;
+
+    if (hasStoragePermission) {
+      pickMusicFolder();
+      return;
+    }
+
+    // Request permissions only if not already granted
+    final statuses = await [
+      Permission.manageExternalStorage,
+      Permission.audio,
+    ].request();
+
+    final granted = (statuses[Permission.manageExternalStorage]?.isGranted ?? false) ||
+        (statuses[Permission.audio]?.isGranted ?? false);
+
+    if (granted) {
       pickMusicFolder();
     } else {
-      // Request both permissions
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.manageExternalStorage,
-        Permission.audio,
-      ].request();
-
-      if ((statuses[Permission.manageExternalStorage]?.isGranted ?? false) ||
-          (statuses[Permission.audio]?.isGranted ?? false)) {
-        // At least one required permission granted
-        pickMusicFolder();
-      } else {
-        // If permissions are denied, handle it here
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Permission to access storage is denied.')),
-        );
-      }
+      // Show a message if permissions are denied
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permission to access storage is denied.')),
+      );
     }
   }
 
+  /// Pick a directory and update the PlaylistProvider
   void pickMusicFolder() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    final selectedDirectory = await FilePicker.platform.getDirectoryPath();
     if (selectedDirectory != null) {
-      // If folder is selected, update the provider
       Provider.of<PlaylistProvider>(
         context,
         listen: false,
@@ -60,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: const EdgeInsets.only(bottom: 20),
           child: Column(
             children: [
+              // Dark Mode Toggle
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primary,
@@ -85,6 +90,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ),
+
+              // Music Folder Picker
               Container(
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primary,
@@ -112,8 +119,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(height: 10),
                     ElevatedButton(
-                      onPressed:
-                          requestStoragePermission, // Request permission before picking folder
+                      onPressed: requestStoragePermission,
                       child: const Text("Select Folder"),
                     ),
                   ],
