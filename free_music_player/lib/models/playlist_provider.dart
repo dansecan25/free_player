@@ -96,6 +96,51 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deleteSong(BuildContext context, Song songObject, int songIndex) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Song"),
+        content: Text("Are you sure you want to delete \"${songObject.songName}\" permanently from device?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final file = File(songObject.audioPath.path);
+
+        if (await file.exists()) {
+          await file.delete();
+        }
+
+        _currentSongList?.removeAt(songIndex);
+
+        notifyListeners();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted ${songObject.songName}")),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error deleting song: $e")),
+        );
+      }
+    }
+  }
+
+
+
   Future<void> pause() async {
     await audioHandler.pause();
     notifyListeners();

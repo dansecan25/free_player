@@ -21,7 +21,7 @@ class _HomePageState extends State<HomePage> {
   String playlistSelected = "";
   List<Song> currentPlaylistSongs = [];
   String title = "Playlists";
-  late final dynamic playlistProvider;
+  late final PlaylistProvider playlistProvider;
   bool songSelected = false;
 
   @override
@@ -42,6 +42,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,8 +107,29 @@ class _HomePageState extends State<HomePage> {
                     title: Text(songString),
                     subtitle: Text(authorName),
                     leading: albumImage !=null ? Image.memory(albumImage,width: 75,height:90, fit: BoxFit.cover): Icon( Icons.music_note,
-                                    size: 12,),
+                                    size: 70,),
                     onTap: () => {goToSong(currentPlaylistSongs[index], index)},
+                    trailing: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) async {
+                        if (value == 'delete') {
+                          // delete action
+                          playlistProvider.deleteSong(context,currentPlaylistSongs[index],index);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: const [
+                              Icon(Icons.delete, color: Color.fromARGB(255, 255, 105, 94)),
+                              SizedBox(width: 8),
+                              Text('Delete'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ));
