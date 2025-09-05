@@ -30,55 +30,82 @@ class MediaControls extends StatelessWidget {
           },
           child: Stack(
             children: [
-              // Main container with song info & controls
+              // Background: either image or solid color
               Container(
-                color: const Color.fromARGB(255, 168, 168, 168),
+                decoration: BoxDecoration(
+                  color: value.currentSongPlaying?.albumArtImagePathBytes == null
+                      ? const Color.fromARGB(255, 168, 168, 168) // fallback color
+                      : null,
+                  image: value.currentSongPlaying?.albumArtImagePathBytes != null
+                      ? DecorationImage(
+                          image: MemoryImage(
+                            value.currentSongPlaying!.albumArtImagePathBytes!,
+                          ),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 15),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min, // Keep it small and at the bottom
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Song Title Row
                     Row(
                       children: [
                         Expanded(
                           child: SizedBox(
                             height: 30,
-                            child: value.currentSongPlaying != null
-                                ? value.currentSongPlaying!.songName.length > 25
-                                    ? Marquee(
-                                        text: value.currentSongPlaying!.songName,
-                                        scrollAxis: Axis.horizontal,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        blankSpace: 20.0,
-                                        velocity: 30.0,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                        pauseAfterRound: Duration(seconds: 1),
-                                        startPadding: 10.0,
-                                        accelerationDuration: Duration(seconds: 1),
-                                        accelerationCurve: Curves.linear,
-                                        decelerationDuration:
-                                            Duration(milliseconds: 500),
-                                        decelerationCurve: Curves.easeOut,
-                                      )
-                                    : Text(
-                                        value.currentSongPlaying!.songName,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                : const Text(
-                                    "--------",
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: value.currentSongPlaying != null
+                                  ? value.currentSongPlaying!.songName.length > 25
+                                      ? Marquee(
+                                          text: value.currentSongPlaying!.songName,
+                                          scrollAxis: Axis.horizontal,
+                                          blankSpace: 20.0,
+                                          velocity: 30.0,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                          pauseAfterRound: Duration(seconds: 1),
+                                        )
+                                      : Text(
+                                          value.currentSongPlaying!.songName,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                  : const Text(
+                                      "--------",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
+                            ),
+                          ),
+                        ),
+
+                        // Arrow-up button
+                        GestureDetector(
+                          onTap: () {
+                            if (value.currentSongPlaying != null) {
+                              goToSong(value.currentSongPlaying!, context);
+                            }
+                          },
+                          child: const Icon(
+                            Icons.keyboard_arrow_up,
+                            size: 28,
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -86,20 +113,30 @@ class MediaControls extends StatelessWidget {
                     // Song author row
                     Row(
                       children: [
-                        Text(
-                          value.currentSongPlaying != null
-                              ? value.currentSongPlaying!.artistName
-                              : "------",
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            value.currentSongPlaying != null
+                                ? value.currentSongPlaying!.artistName
+                                : "------",
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 15),
                     const SizedBox(height: 8),
-                    // Playback Controls
+
+                    // Playback Controls (unchanged)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -142,23 +179,10 @@ class MediaControls extends StatelessWidget {
               ),
 
               // Arrow-up icon floating in top-right
-              Positioned(
-                top: 5,
-                right: 5,
-                child: GestureDetector(
-                  onTap: () {
-                    if (value.currentSongPlaying != null) {
-                      goToSong(value.currentSongPlaying!, context);
-                    }
-                  },
-                  child: const Icon(
-                    Icons.keyboard_arrow_up,
-                    size: 28,
-                  ),
-                ),
-              ),
+              
             ],
           ),
+
         ),
       ),
     );
