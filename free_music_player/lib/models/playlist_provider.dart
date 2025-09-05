@@ -321,7 +321,7 @@ class PlaylistProvider extends ChangeNotifier {
           Song songFile = Song(
             albumArtImagePathBytes: albumArtBytes,
             songName: (entity.path.split(Platform.pathSeparator).last)
-                .replaceAll('.mp3', ''),
+              .replaceAll(RegExp(r'\.(mp3|flac)$', caseSensitive: false), ''),
             audioPath: entity,
             artistName: artistName,
           );
@@ -358,6 +358,9 @@ class PlaylistProvider extends ChangeNotifier {
 
 
   bool _isMusicFile(FileSystemEntity entity) {
-    return entity is File && entity.path.endsWith('.mp3');
+    return entity is File &&
+        (entity.path.toLowerCase().endsWith('.mp3') ||
+        entity.path.toLowerCase().endsWith('.flac'));
   }
+
 }
