@@ -1,3 +1,6 @@
+
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:free_music_player/components/media_controls.dart';
 import 'package:free_music_player/components/my_drawer.dart';
@@ -60,8 +63,8 @@ class _HomePageState extends State<HomePage> {
             }
           }
           return (playlistSelected == ""
-              ? (playlistList.isEmpty
-                  ? (Center(
+              ? (playlistList.isEmpty //if playlist none and is empty the list of playlists, show that there are no playlists
+                  ? (Center( 
                     child: Text(
                       "No playlists saved",
                       style: TextStyle(
@@ -70,7 +73,7 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.black,
                       ),
                     ),
-                  ))
+                  ))//else show the playlists available
                   : (ListView.builder(
                     itemCount: playlistList.length,
                     itemBuilder: (context, index) {
@@ -91,19 +94,19 @@ class _HomePageState extends State<HomePage> {
                       );
                     },
                   )))
-              : ListView.builder(
+              : ListView.builder( //if a playlist is selected, show the song list
                 itemCount: currentPlaylistSongs.length,
                 itemBuilder: (context, index) {
                   final String songString =
                       (currentPlaylistSongs[index]).songName;
                   final String authorName =
                       (currentPlaylistSongs[index]).artistName;
-                  //final String pathName =
-                  // (currentPlaylistSongs[index]).audioPath.path;
+                  Uint8List? albumImage = (currentPlaylistSongs[index]).albumArtImagePathBytes;
                   return ListTile(
                     title: Text(songString),
                     subtitle: Text(authorName),
-                    //leading: Image.asset(song.albumArtImagePath)
+                    leading: albumImage !=null ? Image.memory(albumImage,width: 75,height:90, fit: BoxFit.cover): Icon( Icons.music_note,
+                                    size: 12,),
                     onTap: () => {goToSong(currentPlaylistSongs[index], index)},
                   );
                 },

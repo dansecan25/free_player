@@ -95,7 +95,7 @@ class SongPage extends StatelessWidget {
                             child: value.currentSongPlaying?.albumArtImagePathBytes != null
                                 ? Image.memory(
                                     value.currentSongPlaying!.albumArtImagePathBytes!,
-                                    width: 250,
+                                    width: 325,
                                     height: 250,
                                     fit: BoxFit.cover,
                                   )
@@ -170,7 +170,6 @@ class SongPage extends StatelessWidget {
                                 Icon(Icons.shuffle),
                                 Icon(Icons.repeat),
 
-                                // Total duration
                                 // Total duration text
                                 Text(formatTime(value.totalDuration))
                               ],
