@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:free_music_player/services/audio_handler.dart';
@@ -70,9 +71,14 @@ class PlaylistProvider extends ChangeNotifier {
     final song = _currentSongList![_currentSongIndex!];
     final String path = song.audioPath.path;
     try {
-      //await _audioPlayer.setFilePath(path);
-      //await _audioPlayer.play();
-
+      String? artUriPath;
+      // Save album art to a temporary file if it exists
+      if (song.albumArtImagePathBytes != null) {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/${song.songName}.jpg');
+        await file.writeAsBytes(song.albumArtImagePathBytes!);
+        artUriPath = file.path;
+      }
       // Update audio_service metadata
       // Set the MediaItem and audio source
       await audioHandler.setMediaItem(
@@ -84,6 +90,7 @@ class PlaylistProvider extends ChangeNotifier {
           duration: await audioHandler.player.setAudioSource(
             AudioSource.uri(Uri.file(path))
           ).then((_) => audioHandler.player.duration ?? Duration.zero),
+          artUri: artUriPath != null ? Uri.file(artUriPath) : null,
         ),
       );
 

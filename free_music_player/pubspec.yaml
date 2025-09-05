@@ -46,6 +46,7 @@ dependencies:
   audio_metadata_reader: ^1.4.2
   dart_tags: ^0.4.1
   id3: ^1.0.2
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
