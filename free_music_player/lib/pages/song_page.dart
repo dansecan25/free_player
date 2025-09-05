@@ -179,7 +179,10 @@ class SongPage extends StatelessWidget {
                           Slider(
                               min: 0,
                               max: value.totalDuration.inSeconds.toDouble(),
-                              value: value.currentDuration.inSeconds.toDouble(),
+                              activeColor: const Color.fromARGB(255, 15, 71, 255), // filled part
+                              inactiveColor: Colors.grey.shade600, // background part
+                              thumbColor: const Color.fromARGB(255, 44, 94, 255), // the circle knob
+                                      value: value.currentDuration.inSeconds.toDouble(),
                               onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
                             )
                           ],

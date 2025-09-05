@@ -17,6 +17,16 @@ class MediaControls extends StatelessWidget {
     );
   }
 
+  String formatTime(Duration duration) {
+    String twoDigitSeconds = duration.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+    String formattedTime = "${duration.inMinutes}:$twoDigitSeconds";
+
+    return formattedTime;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<PlaylistProvider>(
@@ -133,8 +143,50 @@ class MediaControls extends StatelessWidget {
                       ],
                     ),
 
-                    const SizedBox(height: 15),
-                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Current position
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            formatTime(value.currentDuration),
+                            style: const TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+
+                        // Total duration text
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            formatTime(value.totalDuration),
+                            style: const TextStyle(
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    Slider(
+                      min: 0,
+                      max: value.totalDuration.inSeconds.toDouble(),
+                      activeColor: const Color.fromARGB(255, 15, 71, 255), // filled part
+                      inactiveColor: Colors.grey.shade600, // background part
+                      thumbColor: const Color.fromARGB(255, 44, 94, 255), // the circle knob
+                      value: value.currentDuration.inSeconds.toDouble(),
+                      onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
+                    ),
 
                     // Playback Controls (unchanged)
                     Row(

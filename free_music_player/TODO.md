@@ -9,7 +9,7 @@
 8. Deploy version 1.0.0 on Google play store
 9. Image on each song tyle [x]
 10. Reorder song list by name
-11. Delete files from song list
+11. Delete files from song list [x]
 12. Repeat functionalities
 13. Shuffle list
 
