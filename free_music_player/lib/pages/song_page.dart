@@ -167,8 +167,57 @@ class SongPage extends StatelessWidget {
                                 // Current position
                                 Text(formatTime(value.currentDuration)),
 
-                                Icon(Icons.shuffle),
-                                Icon(Icons.repeat),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.shuffle,
+                                    color: value.isShuffling ? const Color.fromARGB(255, 25, 98, 255) : const Color.fromARGB(255, 0, 0, 0),
+                                  ),
+                                  onPressed: () {
+                                    value.shuffle();
+                                  },
+                                ),
+                                IconButton(
+                                  icon: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      Icon(
+                                        Icons.repeat,
+                                        color: value.isRepeating > 0
+                                            ? const Color.fromARGB(255, 25, 98, 255)
+                                            : const Color.fromARGB(255, 0, 0, 0),
+                                      ),
+                                      if (value.isRepeating == 2)
+                                        Positioned(
+                                          top: -4,
+                                          right: -4,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(1),
+                                            decoration: BoxDecoration(
+                                              color: const Color.fromARGB(255, 107, 146, 255), // background of the number
+                                              shape: BoxShape.circle,
+                                            ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 14,
+                                              minHeight: 14,
+                                            ),
+                                            child: const Center(
+                                              child: Text(
+                                                '1',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  onPressed: () {
+                                    value.repeat();
+                                  },
+                                ),
 
                                 // Total duration text
                                 Text(formatTime(value.totalDuration))

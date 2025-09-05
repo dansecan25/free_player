@@ -59,7 +59,6 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> play() {
-    print("Play button pressed from notification");
     return _player.play();
   }
 

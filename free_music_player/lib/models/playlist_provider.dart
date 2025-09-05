@@ -28,6 +28,10 @@ class PlaylistProvider extends ChangeNotifier {
   int? _currentSongIndex;
   List<Song>? _currentSongList;
 
+  int? get currentIndex => _currentSongIndex;
+  int get playlistLength => _currentSongList?.length ?? 0;
+
+
   final AudioPlayerHandler audioHandler;
   final AudioPlayer _audioPlayer = AudioPlayer();
   AudioPlayer get audioPlayer => _audioPlayer;
@@ -35,6 +39,26 @@ class PlaylistProvider extends ChangeNotifier {
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
 
+  //for repeat and shuffle values
+  bool _isShuffle=false;
+  int _isRepeat=0;
+
+  bool get isShuffling => _isShuffle;
+  int get isRepeating => _isRepeat;
+  
+  void repeat(){
+    if(_isRepeat>=2){
+      _isRepeat=0;
+    }else{
+      _isRepeat+=1;
+    }
+    notifyListeners();
+  }
+
+  void shuffle(){
+    _isShuffle=!_isShuffle;
+    notifyListeners();
+  }
   
 
   PlaylistProvider(this.audioHandler) {
@@ -214,9 +238,25 @@ class PlaylistProvider extends ChangeNotifier {
     // Listen to end of song
     player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
-        playNextSong();
+        if (_currentSongList == null || _currentSongIndex == null) return;
+
+        if (isRepeating > 0) {
+          if (isRepeating == 1) {
+            // repeat all
+            playNextSong();
+          } else if (isRepeating == 2) {
+            // repeat one
+            play(); // play the same song again
+          }
+        } else {
+          // No repeat
+          if (currentIndex! + 1 <playlistLength) {
+            playNextSong(); // only advance if not at the last song
+          } 
+        }
       }
     });
+
   }
 
   Future<void> initializeMusicDirectory() async {
