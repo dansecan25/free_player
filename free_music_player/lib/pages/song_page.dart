@@ -92,59 +92,58 @@ class SongPage extends StatelessWidget {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: Icon(Icons.music_note, size: 250),
+                            child: value.currentSongPlaying?.albumArtImagePathBytes != null
+                                ? Image.memory(
+                                    value.currentSongPlaying!.albumArtImagePathBytes!,
+                                    width: 250,
+                                    height: 250,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Icon(
+                                    Icons.music_note,
+                                    size: 250,
+                                  ),
                           ),
                           Padding(
-                            padding: EdgeInsets.all(15.0),
+                            padding: const EdgeInsets.all(15.0),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                // Wrap with Expanded to handle long titles
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      //Song title
+                                      // Song title
                                       SizedBox(
                                         height: 25,
-                                        child:
-                                            value.currentSongPlaying!.songName.length > 25
-                                                ? Marquee(
-                                                  text: value.currentSongPlaying!.songName,
-                                                  scrollAxis: Axis.horizontal,
-                                                  blankSpace: 20.0,
-                                                  velocity: 30.0,
-                                                  style: const TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                  pauseAfterRound: Duration(
-                                                    seconds: 1,
-                                                  ),
-                                                  startPadding: 10.0,
-                                                  accelerationDuration:
-                                                      Duration(seconds: 1),
-                                                  accelerationCurve:
-                                                      Curves.linear,
-                                                  decelerationDuration:
-                                                      Duration(
-                                                        milliseconds: 500,
-                                                      ),
-                                                  decelerationCurve:
-                                                      Curves.easeOut,
-                                                )
-                                                : Text(
-                                                  value.currentSongPlaying!.songName,
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 20,
-                                                  ),
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                        child: value.currentSongPlaying!.songName.length > 25
+                                            ? Marquee(
+                                                text: value.currentSongPlaying!.songName,
+                                                scrollAxis: Axis.horizontal,
+                                                blankSpace: 20.0,
+                                                velocity: 30.0,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
                                                 ),
+                                                pauseAfterRound: const Duration(seconds: 1),
+                                                startPadding: 10.0,
+                                                accelerationDuration: const Duration(seconds: 1),
+                                                accelerationCurve: Curves.linear,
+                                                decelerationDuration:
+                                                    const Duration(milliseconds: 500),
+                                                decelerationCurve: Curves.easeOut,
+                                              )
+                                            : Text(
+                                                value.currentSongPlaying!.songName,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 20,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                       ),
-                                      //Artist name
+                                      // Artist name
                                       Text(value.currentSongPlaying!.artistName),
                                     ],
                                   ),

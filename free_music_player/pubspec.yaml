@@ -45,6 +45,7 @@ dependencies:
   audio_session: ^0.2.2
   audio_metadata_reader: ^1.4.2
   dart_tags: ^0.4.1
+  id3: ^1.0.2
 
 dev_dependencies:
   flutter_test:

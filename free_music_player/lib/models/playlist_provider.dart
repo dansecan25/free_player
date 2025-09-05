@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
-import 'package:dart_tags/dart_tags.dart';
 import 'package:free_music_player/services/audio_handler.dart';
+import 'package:id3/id3.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
@@ -223,11 +224,10 @@ class PlaylistProvider extends ChangeNotifier {
               : "Unknown artist";
 
           // Pull album art
-          Uint8List? albumArtBytes;
-
+          Uint8List? albumArtBytes = await getImageUnit8(File(entity.path));
 
           Song songFile = Song(
-            albumArtImagePathBytes: null,
+            albumArtImagePathBytes: albumArtBytes,
             songName: (entity.path.split(Platform.pathSeparator).last)
                 .replaceAll('.mp3', ''),
             audioPath: entity,
@@ -243,6 +243,26 @@ class PlaylistProvider extends ChangeNotifier {
 
     return songs;
   }
+
+  Future<Uint8List?> getImageUnit8(File filePath) async {
+    List<int> mp3Bytes = filePath.readAsBytesSync();
+    MP3Instance mp3instance = MP3Instance(mp3Bytes);
+
+    if (mp3instance.parseTagsSync()) {
+      var meta = mp3instance.getMetaTags();
+
+      if (meta != null && meta.containsKey('APIC')) {
+        var apic = meta['APIC'];
+        if (apic != null && apic['base64'] != null) {
+          String base64Image = apic['base64'];
+          Uint8List imageBytes = base64Decode(base64Image);
+          return imageBytes;
+        }
+      }
+    }
+    return null; // no album art
+  }
+
 
 
   bool _isMusicFile(FileSystemEntity entity) {
