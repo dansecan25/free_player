@@ -90,6 +90,11 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setSongPlaying(Song songObject, int songIndex){
+
+
+  }
+
   Future<void> play() async {
     //final String path = _currentSongList![_currentSongIndex!].audioPath.path;
     final song = _currentSongList![_currentSongIndex!];
