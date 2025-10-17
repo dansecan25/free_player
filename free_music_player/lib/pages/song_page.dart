@@ -29,7 +29,7 @@ class SongPage extends StatelessWidget {
             //body: Column(children: [NeuBox(child: Icon(Icons.search, size: 200))]),
             body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25),
+              padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25,top:100),
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Column(

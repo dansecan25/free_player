@@ -10,8 +10,10 @@
 9. Image on each song tyle [x]
 10. Reorder song list by name
 11. Delete files from song list [x]
-12. Repeat functionalities
+12. Repeat functionalities [x]
 13. Shuffle list
+14. Invert order of list
+15. 
 
 #Release 2.0.0
 1. Change background image 
