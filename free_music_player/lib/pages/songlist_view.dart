@@ -128,8 +128,12 @@ class _SongListViewState extends State<SongListView> {
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) async {
                     if (value == 'delete') {
-                      playlistProvider.deleteSong(context, song, index);
-                      _filterSongs(searchQuery);
+                      await playlistProvider.deleteSong(context, song, index);
+
+                      setState(() {
+                        widget.songs.remove(song); // <— removes from the local list
+                        _filterSongs(searchQuery); // refresh filtered view
+                      });
                     }
                   },
                   itemBuilder: (context) => const [

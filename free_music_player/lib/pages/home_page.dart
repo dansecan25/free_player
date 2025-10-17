@@ -102,39 +102,41 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             } else {
-              return ListView.builder(
-                itemCount: playlistList.length,
-                itemBuilder: (context, index) {
-                  final String playlist = playlistList[index].playlistName;
-                  return ListTile(
-                    title: Text("Playlist Name: $playlist"),
-                    subtitle: FutureBuilder<int>(
-                        future: value.countSongs(playlistList[index].directoryPath),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Text("Counting songs...");
-                          } else if (snapshot.hasError) {
-                            return const Text("Error counting");
-                          } else {
-                            return Text("${snapshot.data ?? 0} songs");
-                          }
-                        },
-                      ),
-                    onTap: () async {
-                      setState(() {
-                        playlistSelected = playlist;
-                        title = "Playlist: $playlist";
-                      });
+              return (
+                ListView.builder(
+                  itemCount: playlistList.length,
+                  itemBuilder: (context, index) {
+                    final String playlist = playlistList[index].playlistName;
+                    return ListTile(
+                      title: Text("Playlist Name: $playlist"),
+                      subtitle: FutureBuilder<int>(
+                          future: value.countSongs(playlistList[index].directoryPath),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Text("Counting songs...");
+                            } else if (snapshot.hasError) {
+                              return const Text("Error counting");
+                            } else {
+                              return Text("${snapshot.data ?? 0} songs");
+                            }
+                          },
+                        ),
+                      onTap: () async {
+                        setState(() {
+                          playlistSelected = playlist;
+                          title = "Playlist: $playlist";
+                        });
 
-                      // Now run the async part *after* setState
-                      final songs = await value.setSongsForPlaylist(playlistList[index].directoryPath);
-                      setState(() {
-                        playlistList[index].setSongs(songs);
-                      });
-                    }
+                        // Now run the async part *after* setState
+                        final songs = await value.setSongsForPlaylist(playlistList[index].directoryPath);
+                        setState(() {
+                          playlistList[index].setSongs(songs);
+                        });
+                      }
 
-                  );
-                },
+                    );
+                  },
+                )
               );
             }
           } else {
