@@ -8,6 +8,7 @@ import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/pages/song_page.dart';
+import 'package:free_music_player/pages/songlist_view.dart';
 import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
@@ -138,71 +139,9 @@ class _HomePageState extends State<HomePage> {
             }
           } else {
             // Show songs of selected playlist with search bar
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search songs...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onChanged: filterSongs,
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: filteredSongs.length,
-                    itemBuilder: (context, index) {
-                      final song = filteredSongs[index];
-                      Uint8List? albumImage = song.albumArtImagePathBytes;
-                      return ListTile(
-                        title: Text(song.songName),
-                        subtitle: Text(song.artistName),
-                        leading: albumImage != null
-                            ? Image.memory(
-                                albumImage,
-                                width: 75,
-                                height: 90,
-                                fit: BoxFit.cover,
-                              )
-                            : const Icon(
-                                Icons.music_note,
-                                size: 70,
-                              ),
-                        onTap: () => goToSong(song, index),
-                        trailing: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert),
-                          onSelected: (value) async {
-                            if (value == 'delete') {
-                              playlistProvider.deleteSong(
-                                  context, song, index);
-                              // Refresh filtered list after deletion
-                              filterSongs(searchQuery);
-                            }
-                          },
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete,
-                                      color: Color.fromARGB(255, 255, 105, 94)),
-                                  SizedBox(width: 8),
-                                  Text('Delete'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+            return SongListView(
+              songs: currentPlaylistSongs,
+              onSongTap: (song, index) => goToSong(song, index),
             );
           }
         },
