@@ -78,7 +78,7 @@ class _HomePageState extends State<HomePage> {
           if (playlistSelected != "") {
             for (Playlist entity in value.playlists) {
               if (entity.playlistName == playlistSelected) {
-                currentPlaylistSongs = entity.playlistSongs;
+                currentPlaylistSongs = entity.playlistSongs!;
               }
             }
             // Initialize filteredSongs for search
@@ -107,15 +107,31 @@ class _HomePageState extends State<HomePage> {
                   final String playlist = playlistList[index].playlistName;
                   return ListTile(
                     title: Text("Playlist Name: $playlist"),
-                    subtitle: Text(
-                      "${playlistList[index].playlistSongs.length} songs",
-                    ),
-                    onTap: () {
+                    subtitle: FutureBuilder<int>(
+                        future: value.countSongs(playlistList[index].directoryPath),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Text("Counting songs...");
+                          } else if (snapshot.hasError) {
+                            return const Text("Error counting");
+                          } else {
+                            return Text("${snapshot.data ?? 0} songs");
+                          }
+                        },
+                      ),
+                    onTap: () async {
                       setState(() {
                         playlistSelected = playlist;
                         title = "Playlist: $playlist";
                       });
-                    },
+
+                      // Now run the async part *after* setState
+                      final songs = await value.setSongsForPlaylist(playlistList[index].directoryPath);
+                      setState(() {
+                        playlistList[index].setSongs(songs);
+                      });
+                    }
+
                   );
                 },
               );

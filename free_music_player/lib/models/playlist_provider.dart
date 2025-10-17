@@ -269,10 +269,16 @@ class PlaylistProvider extends ChangeNotifier {
 
     if (storedPath != null && storedPath.isNotEmpty) {
       _musicDirectoryPath = storedPath;
+      //sets the albums 
       setSongList();
     }
     notifyListeners();
   }
+
+  Future<int> countSongs(Directory dirPath) async {
+    return await _countSongs(dirPath);
+  }
+
 
   void setMusicDirectory(String path) {
     dbService.storeMainFolderPath(path);
@@ -285,6 +291,7 @@ class PlaylistProvider extends ChangeNotifier {
     if (_musicDirectoryPath.isEmpty) return;
 
     Directory musicDir = Directory(_musicDirectoryPath);
+    
     if (!musicDir.existsSync()) return;
 
     _songList = [];
@@ -295,10 +302,12 @@ class PlaylistProvider extends ChangeNotifier {
     List<FileSystemEntity> entities = musicDir.listSync();
 
     for (var entity in entities) {
+      print("Entity is: ");
+      print(entity);
       if (entity is Directory) {
         String name = entity.path.split(Platform.pathSeparator).last;
-        List<Song> songs = await _setSongsForPlaylist(name, entity);
-        playlists.add(Playlist(playlistName: name, playlistSongs: songs));
+        //List<Song> songs = await _setSongsForPlaylist(entity);
+        playlists.add(Playlist(playlistName: name, playlistSongs: null, directoryPath:entity));
         _playlistNames.add(name);
         _playlistPaths.add(entity);
       }
@@ -306,7 +315,18 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<List<Song>> _setSongsForPlaylist(String name, Directory path) async {
+  Future<int> _countSongs(Directory dirPath)async{
+    int counter = 0;
+    List<FileSystemEntity> entities = dirPath.listSync();
+    for (var entity in entities){
+      if(_isMusicFile(entity)){
+        counter++;
+      }
+    }
+    return counter;
+  }
+
+  Future<List<Song>> setSongsForPlaylist(Directory path) async {
     List<Song> songs = [];
     List<FileSystemEntity> entities = path.listSync();
 
