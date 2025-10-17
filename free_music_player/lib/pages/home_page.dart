@@ -1,6 +1,3 @@
-
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:free_music_player/components/media_controls.dart';
 import 'package:free_music_player/components/my_drawer.dart';
@@ -69,27 +66,56 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (playlistSelected == "")
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: "Add Playlist",
+              onPressed: () async {
+                // This will later open a dialog or form to add a playlist to DB
+                showDialog(
+                  context: context,
+                  builder: (ctx) {
+                    return AlertDialog(
+                      title: const Text("Add New Playlist"),
+                      content: const Text("Playlist creation will be available soon."),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text("OK"),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+        ],
+      ),
       drawer: const MyDrawer(),
       body: Consumer<PlaylistProvider>(
         builder: (context, value, child) {
           final List<Playlist> playlistList = value.playlists;
 
-          // Obtain the selected playlist
           if (playlistSelected != "") {
+            // --- Playlist songs view ---
             for (Playlist entity in value.playlists) {
               if (entity.playlistName == playlistSelected) {
                 currentPlaylistSongs = entity.playlistSongs!;
               }
             }
-            // Initialize filteredSongs for search
             if (filteredSongs.isEmpty || searchQuery.isEmpty) {
               filteredSongs = currentPlaylistSongs;
             }
-          }
 
-          if (playlistSelected == "") {
-            // Show playlists
+            return SongListView(
+              songs: currentPlaylistSongs,
+              onSongTap: (song, index) => goToSong(song, index),
+            );
+          } else {
+            // --- Playlist list view ---
             if (playlistList.isEmpty) {
               return const Center(
                 child: Text(
@@ -102,15 +128,16 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             } else {
-              return (
-                ListView.builder(
-                  itemCount: playlistList.length,
-                  itemBuilder: (context, index) {
-                    final String playlist = playlistList[index].playlistName;
-                    return ListTile(
-                      title: Text("Playlist Name: $playlist"),
-                      subtitle: FutureBuilder<int>(
-                          future: value.countSongs(playlistList[index].directoryPath),
+              return ListView.builder(
+                itemCount: playlistList.length,
+                itemBuilder: (context, index) {
+                  final playlist = playlistList[index];
+                  return Column(
+                    children: [
+                      ListTile(
+                        title: Text(playlist.playlistName),
+                        subtitle: FutureBuilder<int>(
+                          future: value.countSongs(playlist.directoryPath),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState == ConnectionState.waiting) {
                               return const Text("Counting songs...");
@@ -121,30 +148,28 @@ class _HomePageState extends State<HomePage> {
                             }
                           },
                         ),
-                      onTap: () async {
-                        setState(() {
-                          playlistSelected = playlist;
-                          title = "Playlist: $playlist";
-                        });
-
-                        // Now run the async part *after* setState
-                        final songs = await value.setSongsForPlaylist(playlistList[index].directoryPath);
-                        setState(() {
-                          playlistList[index].setSongs(songs);
-                        });
-                      }
-
-                    );
-                  },
-                )
+                        onTap: () async {
+                          setState(() {
+                            playlistSelected = playlist.playlistName;
+                            title = "Playlist: ${playlist.playlistName}";
+                          });
+                          final songs = await value.setSongsForPlaylist(playlist.directoryPath);
+                          setState(() {
+                            playlist.setSongs(songs);
+                          });
+                        },
+                      ),
+                      const Divider(
+                        color: Colors.grey, // light gray line
+                        thickness: 0.5,
+                        indent: 16,
+                        endIndent: 16,
+                      ),
+                    ],
+                  );
+                },
               );
             }
-          } else {
-            // Show songs of selected playlist with search bar
-            return SongListView(
-              songs: currentPlaylistSongs,
-              onSongTap: (song, index) => goToSong(song, index),
-            );
           }
         },
       ),
@@ -193,4 +218,5 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
 }

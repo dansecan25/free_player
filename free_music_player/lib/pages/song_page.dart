@@ -78,7 +78,27 @@ class SongPage extends StatelessWidget {
                           ),
                         ),
 
-                        IconButton(onPressed: () {}, icon: const Icon(Icons.menu)),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.menu),
+                          onSelected: (value) async {
+                            if (value == 'delete') {
+                              print("todo");
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, color: Colors.redAccent),
+                                  SizedBox(width: 8),
+                                  Text('Delete Song'),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
                       ],
                     ),
 

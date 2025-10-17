@@ -152,29 +152,55 @@ class PlaylistProvider extends ChangeNotifier {
       ),
     );
 
-    if (confirm == true) {
-      try {
-        final file = File(songObject.audioPath.path);
+  if (confirm == true) {
+    try {
+      final file = File(songObject.audioPath.path);
+      if (await file.exists()) {
+        await file.delete();
+      }
 
-        if (await file.exists()) {
-          await file.delete();
-        }
-
-        _currentSongList?.removeAt(songIndex);
-
-        notifyListeners();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted ${songObject.songName}")),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error deleting song: $e")),
+      // Remove song from current playlist in memory
+      for (var playlist in _playlists) {
+        playlist.playlistSongs?.removeWhere(
+          (song) => song.audioPath.path == songObject.audioPath.path,
         );
       }
+
+      // Also remove from current view (if applicable)
+      _currentSongList?.removeWhere(
+        (song) => song.audioPath.path == songObject.audioPath.path,
+      );
+
+      notifyListeners(); // UI rebuilds automatically
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Deleted ${songObject.songName}")),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error deleting song: $e")),
+      );
     }
   }
+}
 
+  Future<void> deleteCurrentSong(BuildContext context, Song song) async {
+    if (_currentSongList == null) return;
+
+    final index = _currentSongList!.indexWhere(
+        (s) => s.songName == song.songName && s.artistName == song.artistName);
+    if (index == -1) return;
+
+    _currentSongList!.removeAt(index);
+    // Also remove from the actual playlist object if needed
+    final playlist = _playlists.firstWhere(
+        (pl) => pl.playlistSongs == _currentSongList,
+        orElse: () => throw Exception('Playlist not found'));
+    playlist.playlistSongs!.removeAt(index);
+
+    // notify listeners to update UI
+    notifyListeners();
+  }
 
 
   Future<void> pause() async {

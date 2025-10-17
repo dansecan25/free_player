@@ -131,8 +131,10 @@ class _SongListViewState extends State<SongListView> {
                       await playlistProvider.deleteSong(context, song, index);
 
                       setState(() {
-                        widget.songs.remove(song); // <— removes from the local list
-                        _filterSongs(searchQuery); // refresh filtered view
+                        widget.songs.removeWhere(
+                          (s) => s.audioPath.path == song.audioPath.path,
+                        );
+                        _filterSongs(searchQuery); // Refresh filtered list
                       });
                     }
                   },
