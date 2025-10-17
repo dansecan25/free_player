@@ -28,8 +28,10 @@ class SongPage extends StatelessWidget {
             backgroundColor: Theme.of(context).colorScheme.surface,
             //body: Column(children: [NeuBox(child: Icon(Icons.search, size: 200))]),
             body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -39,53 +41,49 @@ class SongPage extends StatelessWidget {
                       children: [
                         IconButton(
                           onPressed: () => Navigator.pop(context),
-                          icon: Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.arrow_back),
                         ),
 
                         // THIS is the key fix: Expanded handles the width safely
                         Expanded(
                           child: SizedBox(
                             height: 25, // enough height for Marquee
-                            child:
-                                value.currentSongPlaying!.songName.length > 25
-                                    ? Marquee(
-                                      text: value.currentSongPlaying!.songName,
-                                      scrollAxis: Axis.horizontal,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      blankSpace: 20.0,
-                                      velocity: 30.0,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      pauseAfterRound: Duration(seconds: 1),
-                                      startPadding: 10.0,
-                                      accelerationDuration: Duration(
-                                        seconds: 1,
-                                      ),
-                                      accelerationCurve: Curves.linear,
-                                      decelerationDuration: Duration(
-                                        milliseconds: 500,
-                                      ),
-                                      decelerationCurve: Curves.easeOut,
-                                    )
-                                    : Text(
-                                      value.currentSongPlaying!.songName,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                            child: value.currentSongPlaying!.songName.length > 25
+                                ? Marquee(
+                                    text: value.currentSongPlaying!.songName,
+                                    scrollAxis: Axis.horizontal,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    blankSpace: 20.0,
+                                    velocity: 30.0,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
                                     ),
+                                    pauseAfterRound: const Duration(seconds: 1),
+                                    startPadding: 10.0,
+                                    accelerationDuration: const Duration(seconds: 1),
+                                    accelerationCurve: Curves.linear,
+                                    decelerationDuration:
+                                        const Duration(milliseconds: 500),
+                                    decelerationCurve: Curves.easeOut,
+                                  )
+                                : Text(
+                                    value.currentSongPlaying!.songName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                           ),
                         ),
 
-                        IconButton(onPressed: () {}, icon: Icon(Icons.menu)),
+                        IconButton(onPressed: () {}, icon: const Icon(Icons.menu)),
                       ],
                     ),
 
                     const SizedBox(height: 25),
+
                     //Song art
                     NeuBox(
                       child: Column(
@@ -99,7 +97,7 @@ class SongPage extends StatelessWidget {
                                     height: 250,
                                     fit: BoxFit.cover,
                                   )
-                                : Icon(
+                                : const Icon(
                                     Icons.music_note,
                                     size: 250,
                                   ),
@@ -116,7 +114,8 @@ class SongPage extends StatelessWidget {
                                       // Song title
                                       SizedBox(
                                         height: 25,
-                                        child: value.currentSongPlaying!.songName.length > 25
+                                        child: value.currentSongPlaying!.songName.length >
+                                                25
                                             ? Marquee(
                                                 text: value.currentSongPlaying!.songName,
                                                 scrollAxis: Axis.horizontal,
@@ -126,9 +125,11 @@ class SongPage extends StatelessWidget {
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.bold,
                                                 ),
-                                                pauseAfterRound: const Duration(seconds: 1),
+                                                pauseAfterRound:
+                                                    const Duration(seconds: 1),
                                                 startPadding: 10.0,
-                                                accelerationDuration: const Duration(seconds: 1),
+                                                accelerationDuration:
+                                                    const Duration(seconds: 1),
                                                 accelerationCurve: Curves.linear,
                                                 decelerationDuration:
                                                     const Duration(milliseconds: 500),
@@ -155,96 +156,98 @@ class SongPage extends StatelessWidget {
                       ),
                     ),
 
-                    //NeuBox(child: Image.asset("png path")),
-                    const SizedBox(height: 25),//below, the slider and timestamps
+                    const SizedBox(height: 25), //below, the slider and timestamps
                     Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 25.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Current position
-                                Text(formatTime(value.currentDuration)),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 25.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Current position
+                              Text(formatTime(value.currentDuration)),
 
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.shuffle,
-                                    color: value.isShuffling ? const Color.fromARGB(255, 25, 98, 255) : const Color.fromARGB(255, 0, 0, 0),
-                                  ),
-                                  onPressed: () {
-                                    value.shuffle();
-                                  },
+                              IconButton(
+                                icon: Icon(
+                                  Icons.shuffle,
+                                  color: value.isShuffling
+                                      ? const Color.fromARGB(255, 25, 98, 255)
+                                      : const Color.fromARGB(255, 0, 0, 0),
                                 ),
-                                IconButton(
-                                  icon: Stack(
-                                    clipBehavior: Clip.none,
-                                    children: [
-                                      Icon(
-                                        Icons.repeat,
-                                        color: value.isRepeating > 0
-                                            ? const Color.fromARGB(255, 25, 98, 255)
-                                            : const Color.fromARGB(255, 0, 0, 0),
-                                      ),
-                                      if (value.isRepeating == 2)
-                                        Positioned(
-                                          top: -4,
-                                          right: -4,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(1),
-                                            decoration: BoxDecoration(
-                                              color: const Color.fromARGB(255, 107, 146, 255), // background of the number
-                                              shape: BoxShape.circle,
-                                            ),
-                                            constraints: const BoxConstraints(
-                                              minWidth: 14,
-                                              minHeight: 14,
-                                            ),
-                                            child: const Center(
-                                              child: Text(
-                                                '1',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
+                                onPressed: () {
+                                  value.shuffle();
+                                },
+                              ),
+                              IconButton(
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      Icons.repeat,
+                                      color: value.isRepeating > 0
+                                          ? const Color.fromARGB(255, 25, 98, 255)
+                                          : const Color.fromARGB(255, 0, 0, 0),
+                                    ),
+                                    if (value.isRepeating == 2)
+                                      Positioned(
+                                        top: -4,
+                                        right: -4,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(1),
+                                          decoration: const BoxDecoration(
+                                            color:
+                                                Color.fromARGB(255, 107, 146, 255), // bg
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(
+                                            minWidth: 14,
+                                            minHeight: 14,
+                                          ),
+                                          child: const Center(
+                                            child: Text(
+                                              '1',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                  onPressed: () {
-                                    value.repeat();
-                                  },
+                                      ),
+                                  ],
                                 ),
+                                onPressed: () {
+                                  value.repeat();
+                                },
+                              ),
 
-                                // Total duration text
-                                Text(formatTime(value.totalDuration))
-                              ],
-                            ),
+                              // Total duration text
+                              Text(formatTime(value.totalDuration))
+                            ],
                           ),
-                          // Slider
-                          Slider(
-                              min: 0,
-                              max: value.totalDuration.inSeconds.toDouble(),
-                              activeColor: const Color.fromARGB(255, 15, 71, 255), // filled part
-                              inactiveColor: Colors.grey.shade600, // background part
-                              thumbColor: const Color.fromARGB(255, 44, 94, 255), // the circle knob
-                                      value: value.currentDuration.inSeconds.toDouble(),
-                              onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
-                            )
-                          ],
-                      ),
+                        ),
+                        // Slider
+                        Slider(
+                          min: 0,
+                          max: value.totalDuration.inSeconds.toDouble(),
+                          activeColor: const Color.fromARGB(255, 15, 71, 255),
+                          inactiveColor: Colors.grey.shade600,
+                          thumbColor: const Color.fromARGB(255, 44, 94, 255),
+                          value: value.currentDuration.inSeconds.toDouble(),
+                          onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
+                        )
+                      ],
+                    ),
 
-                    const SizedBox(height: 10),//below, play pause skip rewind buttons
+                    const SizedBox(height: 10), //below, play pause skip rewind buttons
                     Row(
                       children: [
                         // Previous song button
                         Expanded(
                           child: GestureDetector(
                             onTap: value.previousSong,
-                            child: NeuBox(child: Icon(Icons.skip_previous)),
+                            child: const NeuBox(child: Icon(Icons.skip_previous)),
                           ),
                         ),
                         const SizedBox(width: 20),
@@ -274,16 +277,17 @@ class SongPage extends StatelessWidget {
                         Expanded(
                           child: GestureDetector(
                             onTap: value.playNextSong,
-                            child: NeuBox(child: Icon(Icons.skip_next)),
+                            child: const NeuBox(child: Icon(Icons.skip_next)),
                           ),
                         ),
                       ],
-                    )
-
-                    ],
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+
           ),
     );
   }
