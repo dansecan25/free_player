@@ -17,7 +17,7 @@ class PlaylistProvider extends ChangeNotifier {
   String _musicDirectoryPath = "";
   List<List<Song>> _songList = [];
   final List<String> _playlistNames = [];
-  List<Playlist> _playlists = [];
+  final List<Playlist> _playlists = [];
   List<Directory> _playlistPaths = [];
 
   String get musicDirectoryPath => _musicDirectoryPath;
@@ -256,7 +256,7 @@ class PlaylistProvider extends ChangeNotifier {
 
     // Total duration
     player.durationStream.listen((newDuration) {
-      this._totalDuration = player.duration ?? Duration.zero;
+      _totalDuration = player.duration ?? Duration.zero;
       notifyListeners();
     });
 
