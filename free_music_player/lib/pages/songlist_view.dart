@@ -25,11 +25,12 @@ class _SongListViewState extends State<SongListView> {
   bool isLoadingMore = false;
   String searchQuery = '';
   final int itemsPerPage = 12;
+  bool isReversed = false; // for rendering order inversion
 
   @override
   void initState() {
     super.initState();
-    filteredSongs = widget.songs;
+    filteredSongs = List.from(widget.songs);
     _initializeVisibleSongs();
 
     _scrollController.addListener(() {
@@ -43,7 +44,9 @@ class _SongListViewState extends State<SongListView> {
   }
 
   void _initializeVisibleSongs() {
-    visibleSongs = filteredSongs.take(itemsPerPage).toList();
+    List<Song> songsToRender =
+        isReversed ? filteredSongs.reversed.toList() : filteredSongs;
+    visibleSongs = songsToRender.take(itemsPerPage).toList();
   }
 
   void _loadMoreSongs() {
@@ -52,8 +55,11 @@ class _SongListViewState extends State<SongListView> {
     });
 
     Future.delayed(const Duration(milliseconds: 100), () {
+      List<Song> songsToRender =
+          isReversed ? filteredSongs.reversed.toList() : filteredSongs;
       final nextItems =
-          filteredSongs.skip(visibleSongs.length).take(itemsPerPage).toList();
+          songsToRender.skip(visibleSongs.length).take(itemsPerPage).toList();
+
       setState(() {
         visibleSongs.addAll(nextItems);
         isLoadingMore = false;
@@ -69,6 +75,7 @@ class _SongListViewState extends State<SongListView> {
               song.songName.toLowerCase().contains(query.toLowerCase()))
           .toList();
       _initializeVisibleSongs();
+      _scrollController.jumpTo(0); // scroll to top after search
     });
   }
 
@@ -80,21 +87,41 @@ class _SongListViewState extends State<SongListView> {
 
   @override
   Widget build(BuildContext context) {
-    final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+    final playlistProvider =
+        Provider.of<PlaylistProvider>(context, listen: false);
 
     return Column(
       children: [
+        // Header: Search + invert order button
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search songs...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search songs...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: _filterSongs,
+                ),
               ),
-            ),
-            onChanged: _filterSongs,
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    isReversed = !isReversed;
+                    _initializeVisibleSongs();
+                    _scrollController.jumpTo(0);
+                  });
+                },
+                icon: const Icon(Icons.swap_vert),
+                tooltip: 'Invert display order',
+              ),
+            ],
           ),
         ),
         Expanded(

@@ -6,9 +6,25 @@ import 'package:free_music_player/services/theme_service.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+
+
+  
+
+  Future<void> requestBatteryOptimizationDisable() async {
+    const platform = MethodChannel('battery_optimization');
+    try {
+      await platform.invokeMethod('disableBatteryOptimization');
+    } catch (e) {
+      print('Failed to disable battery optimization: $e');
+    }
+  }
+  await requestBatteryOptimizationDisable();
+
 
 
   // Request MANAGE_EXTERNAL_STORAGE permission on Android 11+
@@ -29,7 +45,7 @@ void main() async {
   // Now inject the provider into the handler
   audioHandler.setPlaylistProvider(playlistProvider);
 
-
+  
   runApp(
     MultiProvider(
       providers: [
