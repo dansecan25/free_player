@@ -30,7 +30,11 @@ class _SongListViewState extends State<SongListView> {
   @override
   void initState() {
     super.initState();
+    _loadSortState();
     filteredSongs = widget.songs;
+    if (isReversed) {
+      filteredSongs = filteredSongs.reversed.toList();
+    }
     _initializeVisibleSongs();
 
     _scrollController.addListener(() {
@@ -41,6 +45,13 @@ class _SongListViewState extends State<SongListView> {
         _loadMoreSongs();
       }
     });
+  }
+
+  void _loadSortState() {
+    final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+    if (playlistProvider.stateService != null) {
+      isReversed = playlistProvider.stateService!.getSortReversed();
+    }
   }
 
   void _initializeVisibleSongs() {
@@ -81,6 +92,12 @@ class _SongListViewState extends State<SongListView> {
       isReversed = !isReversed;
       filteredSongs = filteredSongs.reversed.toList();
       _initializeVisibleSongs();
+      
+      // Save sort state
+      final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+      if (playlistProvider.stateService != null) {
+        playlistProvider.stateService!.saveSortReversed(isReversed);
+      }
     });
   }
 

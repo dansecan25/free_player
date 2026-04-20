@@ -7,6 +7,7 @@ class PlaybackStateService {
   static const String _playbackPositionKey = 'playback_position';
   static const String _isShuffleKey = 'is_shuffle';
   static const String _isRepeatKey = 'is_repeat';
+  static const String _isSortReversedKey = 'is_sort_reversed';
 
   final SharedPreferences _prefs;
 
@@ -76,6 +77,16 @@ class PlaybackStateService {
     return _prefs.getInt(_isRepeatKey) ?? 0;
   }
 
+  /// Save sort reversed state
+  Future<void> saveSortReversed(bool isReversed) async {
+    await _prefs.setBool(_isSortReversedKey, isReversed);
+  }
+
+  /// Get saved sort reversed state
+  bool getSortReversed() {
+    return _prefs.getBool(_isSortReversedKey) ?? false;
+  }
+
   /// Clear all saved state
   Future<void> clearState() async {
     await _prefs.remove(_currentSongIndexKey);
@@ -83,6 +94,7 @@ class PlaybackStateService {
     await _prefs.remove(_playbackPositionKey);
     await _prefs.remove(_isShuffleKey);
     await _prefs.remove(_isRepeatKey);
+    await _prefs.remove(_isSortReversedKey);
   }
 
   /// Check if there is saved state

@@ -29,6 +29,7 @@ class PlaylistProvider extends ChangeNotifier {
 
   int? _currentSongIndex;
   List<Song>? _currentSongList;
+  List<Song>? _originalSongList; // Store original order for unshuffling
 
   int? get currentIndex => _currentSongIndex;
   int get playlistLength => _currentSongList?.length ?? 0;
@@ -65,6 +66,45 @@ class PlaylistProvider extends ChangeNotifier {
   void shuffle(){
     _isShuffle=!_isShuffle;
     stateService?.saveShuffleState(_isShuffle);
+    
+    if (_currentSongList != null && _currentSongList!.isNotEmpty) {
+      if (_isShuffle) {
+        // Save original order before shuffling
+        _originalSongList = List.from(_currentSongList!);
+        
+        // Get current song before shuffle
+        final currentSong = _currentSongIndex != null ? _currentSongList![_currentSongIndex!] : null;
+        
+        // Shuffle the list
+        _currentSongList!.shuffle();
+        
+        // Find the current song's new position after shuffle
+        if (currentSong != null) {
+          _currentSongIndex = _currentSongList!.indexWhere(
+            (song) => song.audioPath.path == currentSong.audioPath.path
+          );
+        }
+      } else {
+        // Restore original order
+        if (_originalSongList != null) {
+          // Get current song before restoring
+          final currentSong = _currentSongIndex != null ? _currentSongList![_currentSongIndex!] : null;
+          
+          // Restore original order
+          _currentSongList = List.from(_originalSongList!);
+          
+          // Find the current song's position in original order
+          if (currentSong != null) {
+            _currentSongIndex = _currentSongList!.indexWhere(
+              (song) => song.audioPath.path == currentSong.audioPath.path
+            );
+          }
+          
+          _originalSongList = null;
+        }
+      }
+    }
+    
     notifyListeners();
   }
   
