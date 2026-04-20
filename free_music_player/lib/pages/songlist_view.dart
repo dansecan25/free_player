@@ -24,6 +24,7 @@ class _SongListViewState extends State<SongListView> {
   List<Song> visibleSongs = [];
   bool isLoadingMore = false;
   String searchQuery = '';
+  bool isReversed = false;
   final int itemsPerPage = 12;
 
   @override
@@ -68,6 +69,17 @@ class _SongListViewState extends State<SongListView> {
           .where((song) =>
               song.songName.toLowerCase().contains(query.toLowerCase()))
           .toList();
+      if (isReversed) {
+        filteredSongs = filteredSongs.reversed.toList();
+      }
+      _initializeVisibleSongs();
+    });
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      isReversed = !isReversed;
+      filteredSongs = filteredSongs.reversed.toList();
       _initializeVisibleSongs();
     });
   }
@@ -86,15 +98,27 @@ class _SongListViewState extends State<SongListView> {
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: TextField(
-            decoration: InputDecoration(
-              hintText: 'Search songs...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search songs...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onChanged: _filterSongs,
+                ),
               ),
-            ),
-            onChanged: _filterSongs,
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.swap_vert, size: 28),
+                tooltip: 'Reverse order',
+                onPressed: _toggleSortOrder,
+              ),
+            ],
           ),
         ),
         Expanded(
