@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:free_music_player/services/audio_handler.dart';
+import 'package:free_music_player/services/playback_state_service.dart';
 import 'package:id3/id3.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/services/database_service.dart';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
+import 'dart:async';
 
 class PlaylistProvider extends ChangeNotifier {
   final dbService = DatabaseService();
@@ -31,10 +33,14 @@ class PlaylistProvider extends ChangeNotifier {
   int? get currentIndex => _currentSongIndex;
   int get playlistLength => _currentSongList?.length ?? 0;
 
-
   final AudioPlayerHandler audioHandler;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  AudioPlayer get audioPlayer => _audioPlayer;
+  final PlaybackStateService? stateService;
+  
+  // Timer for periodic state saving
+  Timer? _stateSaveTimer;
+  
+  // Track current album art file for cleanup
+  File? _currentAlbumArtFile;
 
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
@@ -52,18 +58,22 @@ class PlaylistProvider extends ChangeNotifier {
     }else{
       _isRepeat+=1;
     }
+    stateService?.saveRepeatMode(_isRepeat);
     notifyListeners();
   }
 
   void shuffle(){
     _isShuffle=!_isShuffle;
+    stateService?.saveShuffleState(_isShuffle);
     notifyListeners();
   }
   
 
-  PlaylistProvider(this.audioHandler) {
+  PlaylistProvider(this.audioHandler, {this.stateService}) {
     initializeMusicDirectory();
     _listenToDuration();
+    _restorePlaybackState();
+    _startPeriodicStateSaving();
   }
 
   bool get isPlaying => audioHandler.playbackState.value.playing;
@@ -87,27 +97,131 @@ class PlaylistProvider extends ChangeNotifier {
         _currentSongList!.isNotEmpty) {
       play();
     }
+    stateService?.saveCurrentSongIndex(newIndex);
     notifyListeners();
   }
 
   void setSongPlaying(Song songObject, int songIndex){
+    // This method can be used for additional logic if needed
+  }
 
+  /// Restore playback state from saved preferences
+  Future<void> _restorePlaybackState() async {
+    if (stateService == null || !stateService!.hasSavedState()) {
+      return;
+    }
 
+    try {
+      // Restore shuffle and repeat states
+      _isShuffle = stateService!.getShuffleState();
+      _isRepeat = stateService!.getRepeatMode();
+
+      final savedIndex = stateService!.getCurrentSongIndex();
+      final savedPlaylistPath = stateService!.getCurrentPlaylistPath();
+      final savedPosition = stateService!.getPlaybackPosition();
+
+      if (savedIndex != null && savedPlaylistPath != null) {
+        // Find the playlist by path
+        final playlist = _playlists.firstWhere(
+          (pl) => pl.directoryPath.path == savedPlaylistPath,
+          orElse: () => _playlists.first,
+        );
+
+        // Load songs if not already loaded
+        if (playlist.playlistSongs == null || playlist.playlistSongs!.isEmpty) {
+          final songs = await setSongsForPlaylist(playlist.directoryPath);
+          playlist.setSongs(songs);
+        }
+
+        // Restore playback state
+        _currentSongList = playlist.playlistSongs;
+        _currentSongIndex = savedIndex;
+
+        if (_currentSongList != null && 
+            savedIndex < _currentSongList!.length) {
+          // Restore the song but don't auto-play
+          await play();
+          
+          // Seek to saved position if available
+          if (savedPosition != null) {
+            await seek(Duration(milliseconds: savedPosition));
+          }
+          
+          // Pause immediately (user can resume manually)
+          await pause();
+        }
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('Error restoring playback state: $e');
+    }
+  }
+
+  /// Start periodic state saving
+  void _startPeriodicStateSaving() {
+    _stateSaveTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _saveCurrentState();
+    });
+  }
+
+  /// Save current playback state
+  Future<void> _saveCurrentState() async {
+    if (stateService == null) return;
+
+    try {
+      await stateService!.saveCurrentSongIndex(_currentSongIndex);
+      
+      if (_currentSongList != null && _currentSongList!.isNotEmpty) {
+        // Save the playlist directory path
+        final currentPlaylist = _playlists.firstWhere(
+          (pl) => pl.playlistSongs == _currentSongList,
+          orElse: () => _playlists.first,
+        );
+        await stateService!.saveCurrentPlaylistPath(currentPlaylist.directoryPath.path);
+      }
+
+      // Save current position
+      final position = audioHandler.player.position;
+      await stateService!.savePlaybackPosition(position.inMilliseconds);
+    } catch (e) {
+      print('Error saving state: $e');
+    }
+  }
+
+  /// Clean up previous album art file
+  Future<void> _cleanupAlbumArt() async {
+    if (_currentAlbumArtFile != null) {
+      try {
+        if (await _currentAlbumArtFile!.exists()) {
+          await _currentAlbumArtFile!.delete();
+        }
+      } catch (e) {
+        print('Error deleting album art file: $e');
+      }
+      _currentAlbumArtFile = null;
+    }
   }
 
   Future<void> play() async {
-    //final String path = _currentSongList![_currentSongIndex!].audioPath.path;
     final song = _currentSongList![_currentSongIndex!];
     final String path = song.audioPath.path;
     try {
+      // Clean up previous album art file
+      await _cleanupAlbumArt();
+      
       String? artUriPath;
       // Save album art to a temporary file if it exists
       if (song.albumArtImagePathBytes != null) {
         final tempDir = await getTemporaryDirectory();
-        final file = File('${tempDir.path}/${song.songName}.jpg');
+        // Use a unique filename to avoid conflicts
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final file = File('${tempDir.path}/album_art_$timestamp.jpg');
         await file.writeAsBytes(song.albumArtImagePathBytes!);
         artUriPath = file.path;
+        _currentAlbumArtFile = file; // Track for cleanup
       }
+      
       // Update audio_service metadata
       // Set the MediaItem and audio source
       await audioHandler.setMediaItem(
@@ -123,11 +237,15 @@ class PlaylistProvider extends ChangeNotifier {
         ),
       );
 
-
       await audioHandler.play();
+      
+      // Save state after starting playback
+      await _saveCurrentState();
 
     } catch (e) {
       print("Error playing song: $e");
+      // Clean up on error
+      await _cleanupAlbumArt();
     }
     notifyListeners();
   }
@@ -159,11 +277,17 @@ class PlaylistProvider extends ChangeNotifier {
         await file.delete();
       }
 
-      // Remove song from current playlist in memory
+      // Remove song from current playlist in memory and update count
       for (var playlist in _playlists) {
+        final initialLength = playlist.playlistSongs?.length ?? 0;
         playlist.playlistSongs?.removeWhere(
           (song) => song.audioPath.path == songObject.audioPath.path,
         );
+        // Update cached song count
+        final newLength = playlist.playlistSongs?.length ?? 0;
+        if (initialLength != newLength) {
+          playlist.setSongCount(newLength);
+        }
       }
 
       // Also remove from current view (if applicable)
@@ -197,6 +321,7 @@ class PlaylistProvider extends ChangeNotifier {
         (pl) => pl.playlistSongs == _currentSongList,
         orElse: () => throw Exception('Playlist not found'));
     playlist.playlistSongs!.removeAt(index);
+    playlist.setSongCount(playlist.playlistSongs!.length);
 
     // notify listeners to update UI
     notifyListeners();
@@ -205,6 +330,7 @@ class PlaylistProvider extends ChangeNotifier {
 
   Future<void> pause() async {
     await audioHandler.pause();
+    await _saveCurrentState();
     notifyListeners();
   }
 
@@ -256,7 +382,7 @@ class PlaylistProvider extends ChangeNotifier {
 
     // Total duration
     player.durationStream.listen((newDuration) {
-      this._totalDuration = player.duration ?? Duration.zero;
+      _totalDuration = player.duration ?? Duration.zero;
       notifyListeners();
     });
 
@@ -332,8 +458,14 @@ class PlaylistProvider extends ChangeNotifier {
       print(entity);
       if (entity is Directory) {
         String name = entity.path.split(Platform.pathSeparator).last;
-        //List<Song> songs = await _setSongsForPlaylist(entity);
-        playlists.add(Playlist(playlistName: name, playlistSongs: null, directoryPath:entity));
+        // Count songs and cache the count
+        final count = await _countSongs(entity);
+        playlists.add(Playlist(
+          playlistName: name, 
+          playlistSongs: null, 
+          directoryPath: entity,
+          songCount: count, // Cache the count immediately
+        ));
         _playlistNames.add(name);
         _playlistPaths.add(entity);
       }
@@ -414,4 +546,14 @@ class PlaylistProvider extends ChangeNotifier {
         entity.path.toLowerCase().endsWith('.flac'));
   }
 
+  @override
+  void dispose() {
+    _stateSaveTimer?.cancel();
+    // Clean up album art file on dispose
+    _cleanupAlbumArt();
+    super.dispose();
+  }
+
 }
+
+// Made with Bob

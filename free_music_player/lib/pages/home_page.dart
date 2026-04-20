@@ -136,18 +136,26 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       ListTile(
                         title: Text(playlist.playlistName),
-                        subtitle: FutureBuilder<int>(
-                          future: value.countSongs(playlist.directoryPath),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Text("Counting songs...");
-                            } else if (snapshot.hasError) {
-                              return const Text("Error counting");
-                            } else {
-                              return Text("${snapshot.data ?? 0} songs");
-                            }
-                          },
-                        ),
+                        subtitle: playlist.songCount != null
+                            ? Text("${playlist.songCount} songs")
+                            : FutureBuilder<int>(
+                                future: value.countSongs(playlist.directoryPath),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return const Text("Counting songs...");
+                                  } else if (snapshot.hasError) {
+                                    return const Text("Error counting");
+                                  } else {
+                                    // Cache the count once we have it
+                                    if (snapshot.hasData) {
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        playlist.setSongCount(snapshot.data!);
+                                      });
+                                    }
+                                    return Text("${snapshot.data ?? 0} songs");
+                                  }
+                                },
+                              ),
                         onTap: () async {
                           setState(() {
                             playlistSelected = playlist.playlistName;
