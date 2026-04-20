@@ -9,6 +9,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   PlaylistProvider? playlistProvider;
   bool _isInitialized = false;
   bool _isDisposing = false;
+  bool _wasPlayingBeforeInterruption = false;
 
   AudioPlayerHandler() {
     _initializeAudioSession();
@@ -21,36 +22,50 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
       
-      // Handle audio interruptions (phone calls, etc.)
+      // Handle audio interruptions (phone calls, alarms, other apps, etc.)
       session.interruptionEventStream.listen((event) {
         if (event.begin) {
+          // Interruption started - save current playing state
+          _wasPlayingBeforeInterruption = _player.playing;
+          
           switch (event.type) {
             case AudioInterruptionType.duck:
               // Lower volume during interruption
-              _player.setVolume(0.5);
+              if (_wasPlayingBeforeInterruption) {
+                _player.setVolume(0.5);
+              }
               break;
             case AudioInterruptionType.pause:
             case AudioInterruptionType.unknown:
-              // Pause playback
-              pause();
+              // Pause playback only if currently playing
+              if (_wasPlayingBeforeInterruption) {
+                pause();
+              }
               break;
           }
         } else {
-          // Interruption ended
+          // Interruption ended - only resume if we were playing before
           switch (event.type) {
             case AudioInterruptionType.duck:
-              // Restore volume
-              _player.setVolume(1.0);
+              // Restore volume only if we were playing
+              if (_wasPlayingBeforeInterruption) {
+                _player.setVolume(1.0);
+              }
               break;
             case AudioInterruptionType.pause:
-              // Resume if we should
-              if (event.type == AudioInterruptionType.pause) {
+              // Only resume if we were actually playing before the interruption
+              // Do NOT resume if user had manually paused the music
+              if (_wasPlayingBeforeInterruption && event.type == AudioInterruptionType.pause) {
                 play();
               }
               break;
             case AudioInterruptionType.unknown:
+              // Don't auto-resume for unknown interruption types
               break;
           }
+          
+          // Reset the flag after handling interruption end
+          _wasPlayingBeforeInterruption = false;
         }
       });
 
