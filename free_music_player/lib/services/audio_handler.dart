@@ -192,6 +192,16 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
+  /// Called by the OS when the user swipes the app away in the recent-apps
+  /// switcher (task manager). Unlike simply going to the home screen (which
+  /// does NOT trigger this), a swipe-away means the user wants the app
+  /// fully closed -- so always stop playback here, whether it was playing
+  /// or paused, and let the background service/notification shut down.
+  @override
+  Future<void> onTaskRemoved() async {
+    await stop();
+  }
+
   @override
   Future<void> seek(Duration position) async {
     try {

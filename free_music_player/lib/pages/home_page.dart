@@ -34,18 +34,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void goToSong(Song songObject, int songIndex) {
-    playlistProvider.currentSongList = currentPlaylistSongs;
-    if(songObject.songName != currentPlaylistSongs[songIndex].songName){
-      for (int i=0;i<currentPlaylistSongs.length;i++){
-        if(songObject.songName==currentPlaylistSongs[i].songName){
-          playlistProvider.currentSongIndex = i;
-          break;
-        }
-      }
-    }else{
-      playlistProvider.currentSongIndex = songIndex;
-    }
-    playlistProvider.setSongPlaying(songObject,songIndex);
+    playlistProvider.playFromList(currentPlaylistSongs, songObject);
+    playlistProvider.setSongPlaying(songObject, songIndex);
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => SongPage(songObject: songObject)),

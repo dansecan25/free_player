@@ -13,6 +13,79 @@ import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/services/database_service.dart';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart' show compute;
+
+/// Lightweight, isolate-safe stand-in for a Song, used only to ferry
+/// metadata scan results back from the background isolate spawned by
+/// [compute]. Kept to primitive fields so it can be sent across the
+/// isolate boundary cheaply.
+class _SongMetadataStub {
+  final String songName;
+  final String artistName;
+  final String audioPath;
+
+  _SongMetadataStub(this.songName, this.artistName, this.audioPath);
+}
+
+bool _isMusicFilePath(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.mp3') || lower.endsWith('.flac');
+}
+
+/// Runs entirely on a background isolate (via compute). Scans a playlist
+/// directory and reads just the fast metadata (name/artist) for every song
+/// -- no album art decoding here, which is what made this slow before.
+List<_SongMetadataStub> _scanPlaylistMetadata(String dirPath) {
+  final dir = Directory(dirPath);
+  final entities = dir.listSync();
+  final result = <_SongMetadataStub>[];
+
+  for (final entity in entities) {
+    if (entity is File && _isMusicFilePath(entity.path)) {
+      try {
+        final metadata = readMetadata(File(entity.path), getImage: false);
+        final artistName = metadata.artist?.isNotEmpty == true
+            ? metadata.artist!
+            : "Unknown artist";
+        final name = entity.path
+            .split(Platform.pathSeparator)
+            .last
+            .replaceAll(RegExp(r'\.(mp3|flac)$', caseSensitive: false), '');
+        result.add(_SongMetadataStub(name, artistName, entity.path));
+      } catch (e) {
+        // Skip unreadable files; the file is still counted elsewhere.
+      }
+    }
+  }
+  return result;
+}
+
+/// Runs entirely on a background isolate (via compute). Decodes embedded
+/// album art for a batch of file paths. This is the expensive part
+/// (full file read + tag parse per song) that used to block the UI thread.
+Map<String, Uint8List?> _extractAlbumArtBatch(List<String> paths) {
+  final result = <String, Uint8List?>{};
+  for (final path in paths) {
+    try {
+      final mp3Bytes = File(path).readAsBytesSync();
+      final mp3instance = MP3Instance(mp3Bytes);
+      Uint8List? art;
+      if (mp3instance.parseTagsSync()) {
+        final meta = mp3instance.getMetaTags();
+        if (meta != null && meta.containsKey('APIC')) {
+          final apic = meta['APIC'];
+          if (apic != null && apic['base64'] != null) {
+            art = base64Decode(apic['base64']);
+          }
+        }
+      }
+      result[path] = art;
+    } catch (e) {
+      result[path] = null;
+    }
+  }
+  return result;
+}
 
 class PlaylistProvider extends ChangeNotifier {
   final dbService = DatabaseService();
@@ -66,45 +139,40 @@ class PlaylistProvider extends ChangeNotifier {
   void shuffle(){
     _isShuffle=!_isShuffle;
     stateService?.saveShuffleState(_isShuffle);
-    
-    if (_currentSongList != null && _currentSongList!.isNotEmpty) {
+
+    // _originalSongList always holds the canonical (unshuffled) order of
+    // whatever queue is currently loaded -- it's kept up to date by the
+    // currentSongList setter every time a new playlist/song is opened, so
+    // it can never be left over from a *different* playlist the way it
+    // used to be. That stale state was the root cause of shuffle breaking
+    // after switching playlists.
+    if (_originalSongList != null && _originalSongList!.isNotEmpty) {
+      // Remember which song was playing so we can keep playback on it
+      // after we rebuild the list.
+      final currentSong = (_currentSongIndex != null &&
+              _currentSongList != null &&
+              _currentSongIndex! < _currentSongList!.length)
+          ? _currentSongList![_currentSongIndex!]
+          : null;
+
       if (_isShuffle) {
-        // Save original order before shuffling
-        _originalSongList = List.from(_currentSongList!);
-        
-        // Get current song before shuffle
-        final currentSong = _currentSongIndex != null ? _currentSongList![_currentSongIndex!] : null;
-        
-        // Shuffle the list
-        _currentSongList!.shuffle();
-        
-        // Find the current song's new position after shuffle
-        if (currentSong != null) {
-          _currentSongIndex = _currentSongList!.indexWhere(
-            (song) => song.audioPath.path == currentSong.audioPath.path
-          );
-        }
+        // Always shuffle a fresh copy of the canonical order, never the
+        // canonical list itself and never the list in place -- this keeps
+        // the on-screen playlist order (which shares Song objects with
+        // _originalSongList) untouched by shuffling the playback queue.
+        _currentSongList = List<Song>.from(_originalSongList!)..shuffle();
       } else {
-        // Restore original order
-        if (_originalSongList != null) {
-          // Get current song before restoring
-          final currentSong = _currentSongIndex != null ? _currentSongList![_currentSongIndex!] : null;
-          
-          // Restore original order
-          _currentSongList = List.from(_originalSongList!);
-          
-          // Find the current song's position in original order
-          if (currentSong != null) {
-            _currentSongIndex = _currentSongList!.indexWhere(
-              (song) => song.audioPath.path == currentSong.audioPath.path
-            );
-          }
-          
-          _originalSongList = null;
-        }
+        _currentSongList = List<Song>.from(_originalSongList!);
+      }
+
+      if (currentSong != null) {
+        final newIndex = _currentSongList!.indexWhere(
+          (song) => song.audioPath.path == currentSong.audioPath.path,
+        );
+        _currentSongIndex = newIndex == -1 ? 0 : newIndex;
       }
     }
-    
+
     notifyListeners();
   }
   
@@ -127,7 +195,34 @@ class PlaylistProvider extends ChangeNotifier {
           : null;
 
   set currentSongList(List<Song>? newList) {
-    _currentSongList = newList;
+    if (newList == null) {
+      _currentSongList = null;
+      _originalSongList = null;
+      return;
+    }
+    // Defensive copies: never hang on to the caller's actual list (e.g.
+    // Playlist.playlistSongs / the list backing the on-screen SongListView).
+    // Previously shuffle() called .shuffle() directly on this reference,
+    // silently reordering the visible playlist too and leaving stale state
+    // once a different playlist's list was assigned here.
+    _originalSongList = List<Song>.from(newList);
+    _currentSongList = _isShuffle
+        ? (List<Song>.from(newList)..shuffle())
+        : List<Song>.from(newList);
+  }
+
+  /// Starts playing [song] from [sourceList] (typically a playlist's song
+  /// list). This is the safe way to begin playback of a playlist: it loads
+  /// the list as the new queue (applying the current shuffle state, if any)
+  /// and then locates [song] by identity within the resulting queue --
+  /// rather than assuming a tapped index still lines up once shuffling may
+  /// have reordered things.
+  void playFromList(List<Song> sourceList, Song song) {
+    currentSongList = sourceList;
+    final index = _currentSongList!.indexWhere(
+      (s) => s.audioPath.path == song.audioPath.path,
+    );
+    currentSongIndex = index == -1 ? 0 : index;
   }
 
   set currentSongIndex(int? newIndex) {
@@ -173,8 +268,9 @@ class PlaylistProvider extends ChangeNotifier {
           playlist.setSongs(songs);
         }
 
-        // Restore playback state
-        _currentSongList = playlist.playlistSongs;
+        // Restore playback state (defensive copy -- see currentSongList setter)
+        _originalSongList = List<Song>.from(playlist.playlistSongs!);
+        _currentSongList = List<Song>.from(playlist.playlistSongs!);
         _currentSongIndex = savedIndex;
 
         if (_currentSongList != null && 
@@ -334,6 +430,9 @@ class PlaylistProvider extends ChangeNotifier {
       _currentSongList?.removeWhere(
         (song) => song.audioPath.path == songObject.audioPath.path,
       );
+      _originalSongList?.removeWhere(
+        (song) => song.audioPath.path == songObject.audioPath.path,
+      );
 
       notifyListeners(); // UI rebuilds automatically
 
@@ -351,17 +450,27 @@ class PlaylistProvider extends ChangeNotifier {
   Future<void> deleteCurrentSong(BuildContext context, Song song) async {
     if (_currentSongList == null) return;
 
-    final index = _currentSongList!.indexWhere(
-        (s) => s.songName == song.songName && s.artistName == song.artistName);
-    if (index == -1) return;
+    _currentSongList!.removeWhere(
+        (s) => s.audioPath.path == song.audioPath.path);
+    _originalSongList?.removeWhere(
+        (s) => s.audioPath.path == song.audioPath.path);
 
-    _currentSongList!.removeAt(index);
-    // Also remove from the actual playlist object if needed
-    final playlist = _playlists.firstWhere(
-        (pl) => pl.playlistSongs == _currentSongList,
-        orElse: () => throw Exception('Playlist not found'));
-    playlist.playlistSongs!.removeAt(index);
-    playlist.setSongCount(playlist.playlistSongs!.length);
+    // Also remove from whichever playlist actually contains this song
+    // (matched by identity, since _currentSongList is now always a
+    // defensive copy rather than the same list object as a playlist's
+    // playlistSongs).
+    for (final playlist in _playlists) {
+      final removed = playlist.playlistSongs
+              ?.where((s) => s.audioPath.path == song.audioPath.path)
+              .isNotEmpty ??
+          false;
+      if (removed) {
+        playlist.playlistSongs!
+            .removeWhere((s) => s.audioPath.path == song.audioPath.path);
+        playlist.setSongCount(playlist.playlistSongs!.length);
+        break;
+      }
+    }
 
     // notify listeners to update UI
     notifyListeners();
@@ -524,58 +633,57 @@ class PlaylistProvider extends ChangeNotifier {
     return counter;
   }
 
+  /// Loads the songs for a playlist and returns almost immediately.
+  ///
+  /// Phase 1 (awaited here): scan the directory for metadata only
+  /// (name/artist) on a background isolate via [compute]. This is fast and
+  /// never touches album art, so the UI can show the full song list and
+  /// let the user tap/play any song right away.
+  ///
+  /// Phase 2 (fire-and-forget): album art is decoded in small batches on a
+  /// background isolate and filled into the returned [Song] objects as it
+  /// becomes available, with [notifyListeners] called after each batch so
+  /// the art fades in progressively. Neither phase blocks the main isolate,
+  /// so the UI never freezes even for 100+ song playlists.
   Future<List<Song>> setSongsForPlaylist(Directory path) async {
-    List<Song> songs = [];
-    List<FileSystemEntity> entities = path.listSync();
+    final stubs = await compute(_scanPlaylistMetadata, path.path);
 
-    for (var entity in entities) {
-      if (_isMusicFile(entity)) {
-        try {
-          final metadata = readMetadata(File(entity.path), getImage: false);
+    final songs = stubs
+        .map((s) => Song(
+              songName: s.songName,
+              artistName: s.artistName,
+              albumArtImagePathBytes: null,
+              audioPath: File(s.audioPath),
+            ))
+        .toList();
 
-          // Only pull the author
-          String artistName = metadata.artist?.isNotEmpty == true
-              ? metadata.artist!
-              : "Unknown artist";
-
-          // Pull album art
-          Uint8List? albumArtBytes = await getImageUnit8(File(entity.path));
-
-          Song songFile = Song(
-            albumArtImagePathBytes: albumArtBytes,
-            songName: (entity.path.split(Platform.pathSeparator).last)
-              .replaceAll(RegExp(r'\.(mp3|flac)$', caseSensitive: false), ''),
-            audioPath: entity,
-            artistName: artistName,
-          );
-
-          songs.add(songFile);
-        } catch (e) {
-          print("Error reading metadata for ${entity.path}: $e");
-        }
-      }
-    }
+    // Don't await: let artwork stream in the background while the caller
+    // already has a fully usable (art-less) song list to display.
+    _loadAlbumArtInBackground(songs);
 
     return songs;
   }
 
-  Future<Uint8List?> getImageUnit8(File filePath) async {
-    List<int> mp3Bytes = filePath.readAsBytesSync();
-    MP3Instance mp3instance = MP3Instance(mp3Bytes);
+  /// Decodes album art for [songs] in small batches on background isolates,
+  /// mutating each Song's art field in place as results come back and
+  /// notifying listeners after every batch so the UI updates progressively.
+  Future<void> _loadAlbumArtInBackground(List<Song> songs) async {
+    const batchSize = 8;
+    for (int i = 0; i < songs.length; i += batchSize) {
+      final end = (i + batchSize < songs.length) ? i + batchSize : songs.length;
+      final batch = songs.sublist(i, end);
+      final paths = batch.map((s) => s.audioPath.path).toList();
 
-    if (mp3instance.parseTagsSync()) {
-      var meta = mp3instance.getMetaTags();
-
-      if (meta != null && meta.containsKey('APIC')) {
-        var apic = meta['APIC'];
-        if (apic != null && apic['base64'] != null) {
-          String base64Image = apic['base64'];
-          Uint8List imageBytes = base64Decode(base64Image);
-          return imageBytes;
+      try {
+        final artByPath = await compute(_extractAlbumArtBatch, paths);
+        for (final song in batch) {
+          song.albumArtImagePathBytes = artByPath[song.audioPath.path];
         }
+        notifyListeners();
+      } catch (e) {
+        print('Error loading album art batch: $e');
       }
     }
-    return null; // no album art
   }
 
 
