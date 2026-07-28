@@ -25,7 +25,7 @@ class _SongListViewState extends State<SongListView> {
   bool isLoadingMore = false;
   String searchQuery = '';
   bool isReversed = false;
-  final int itemsPerPage = 12;
+  final int itemsPerPage = 10; // matches PlaylistProvider's artwork batch size
 
   @override
   void initState() {
@@ -63,7 +63,11 @@ class _SongListViewState extends State<SongListView> {
       isLoadingMore = true;
     });
 
-    Future.delayed(const Duration(milliseconds: 100), () {
+    // Schedule after the current frame instead of an arbitrary delay --
+    // avoids doing the list update mid-scroll-gesture without adding a
+    // fixed stall on top of it.
+    Future.microtask(() {
+      if (!mounted) return;
       final nextItems =
           filteredSongs.skip(visibleSongs.length).take(itemsPerPage).toList();
       setState(() {
@@ -151,19 +155,36 @@ class _SongListViewState extends State<SongListView> {
               }
 
               final song = visibleSongs[index];
-              Uint8List? albumImage = song.albumArtImagePathBytes;
+              final dpr = MediaQuery.of(context).devicePixelRatio;
 
               return ListTile(
                 title: Text(song.songName),
                 subtitle: Text(song.artistName),
-                leading: albumImage != null
-                    ? Image.memory(
+                leading: ValueListenableBuilder<Uint8List?>(
+                  valueListenable: song.albumArtNotifier,
+                  builder: (context, albumImage, _) {
+                    if (albumImage == null) {
+                      return const Icon(Icons.music_note, size: 70);
+                    }
+                    return RepaintBoundary(
+                      child: Image.memory(
                         albumImage,
                         width: 75,
                         height: 90,
                         fit: BoxFit.cover,
-                      )
-                    : const Icon(Icons.music_note, size: 70),
+                        // Decode straight to the display size instead of
+                        // full original resolution -- decoding a full
+                        // ~1000px embedded cover just to shrink it to a
+                        // 75x90 tile is the expensive part that was
+                        // stalling the frame each time a new row scrolled
+                        // into view.
+                        cacheWidth: (75 * dpr).round(),
+                        cacheHeight: (90 * dpr).round(),
+                        gaplessPlayback: true,
+                      ),
+                    );
+                  },
+                ),
                 onTap: () => widget.onSongTap(song, index),
                 trailing: PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),

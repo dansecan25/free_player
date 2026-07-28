@@ -642,10 +642,15 @@ class PlaylistProvider extends ChangeNotifier {
   ///
   /// Phase 2 (fire-and-forget): album art is decoded in small batches on a
   /// background isolate and filled into the returned [Song] objects as it
-  /// becomes available, with [notifyListeners] called after each batch so
-  /// the art fades in progressively. Neither phase blocks the main isolate,
-  /// so the UI never freezes even for 100+ song playlists.
-  Future<List<Song>> setSongsForPlaylist(Directory path) async {
+  /// becomes available. If [onArtworkBatchLoaded] is given, it's called
+  /// after every batch instead of the app-wide [notifyListeners] -- this
+  /// lets a single page (e.g. a playlist's song list) repaint itself as art
+  /// streams in without force-rebuilding every other Provider listener in
+  /// the app (media controls, other pages, etc.) on every batch.
+  Future<List<Song>> setSongsForPlaylist(
+    Directory path, {
+    void Function(List<Song> updatedBatch)? onArtworkBatchLoaded,
+  }) async {
     final stubs = await compute(_scanPlaylistMetadata, path.path);
 
     final songs = stubs
@@ -659,16 +664,22 @@ class PlaylistProvider extends ChangeNotifier {
 
     // Don't await: let artwork stream in the background while the caller
     // already has a fully usable (art-less) song list to display.
-    _loadAlbumArtInBackground(songs);
+    _loadAlbumArtInBackground(songs, onBatchLoaded: onArtworkBatchLoaded);
 
     return songs;
   }
 
   /// Decodes album art for [songs] in small batches on background isolates,
-  /// mutating each Song's art field in place as results come back and
-  /// notifying listeners after every batch so the UI updates progressively.
-  Future<void> _loadAlbumArtInBackground(List<Song> songs) async {
-    const batchSize = 8;
+  /// mutating each Song's art field in place as results come back. Calls
+  /// [onBatchLoaded] with the updated batch after each one if provided,
+  /// otherwise falls back to the app-wide [notifyListeners].
+  Future<void> _loadAlbumArtInBackground(
+    List<Song> songs, {
+    void Function(List<Song> batch)? onBatchLoaded,
+  }) async {
+    // Aligned with SongListView's page size so a freshly-revealed page of
+    // songs tends to get its artwork in one shot rather than half-loaded.
+    const batchSize = 10;
     for (int i = 0; i < songs.length; i += batchSize) {
       final end = (i + batchSize < songs.length) ? i + batchSize : songs.length;
       final batch = songs.sublist(i, end);
@@ -679,7 +690,11 @@ class PlaylistProvider extends ChangeNotifier {
         for (final song in batch) {
           song.albumArtImagePathBytes = artByPath[song.audioPath.path];
         }
-        notifyListeners();
+        if (onBatchLoaded != null) {
+          onBatchLoaded(batch);
+        } else {
+          notifyListeners();
+        }
       } catch (e) {
         print('Error loading album art batch: $e');
       }
