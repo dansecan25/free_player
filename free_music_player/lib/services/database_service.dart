@@ -5,17 +5,18 @@ import 'package:free_music_player/models/song_record.dart';
 
 class DatabaseService {
   static const String _databaseName = "freeplayer.db";
-  static const int _databaseVersion = 2;
+  static const int _databaseVersion = 3;
 
-  // ── Table: PATHS (settings — which root folder the user chose) ───────────
-  static const String _pathsTable = 'PATHS';
+  // ── Table names ───────────────────────────────────────────────────────────
+  static const String _pathsTable        = 'PATHS';
+  static const String _songsTable        = 'SONGS';
+  static const String _playlistsTable    = 'PLAYLISTS';
+  static const String _playlistSongsTable = 'PLAYLIST_SONGS';
 
-  // ── Table: SONGS (the core music library) ────────────────────────────────
-  static const String _songsTable = 'SONGS';
-
-  // Expose table names so sync service can refer to them without hard-coding.
-  String get songsTableName => _songsTable;
-  String get pathsTableName => _pathsTable;
+  String get songsTableName        => _songsTable;
+  String get pathsTableName        => _pathsTable;
+  String get playlistsTableName    => _playlistsTable;
+  String get playlistSongsTableName => _playlistSongsTable;
 
   // ── Singleton DB connection ───────────────────────────────────────────────
   Database? _db;
@@ -42,12 +43,17 @@ class DatabaseService {
       );
     ''');
     await db.execute(_songsTableDdl);
+    await db.execute(_playlistsTableDdl);
+    await db.execute(_playlistSongsTableDdl);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Migrate from v1 (PATHS-only) to v2 (adds SONGS table)
       await db.execute(_songsTableDdl);
+    }
+    if (oldVersion < 3) {
+      await db.execute(_playlistsTableDdl);
+      await db.execute(_playlistSongsTableDdl);
     }
   }
 
@@ -64,9 +70,24 @@ class DatabaseService {
     );
   ''';
 
+  static const String _playlistsTableDdl = '''
+    CREATE TABLE IF NOT EXISTS PLAYLISTS (
+      id    INTEGER PRIMARY KEY AUTOINCREMENT,
+      name  TEXT    NOT NULL UNIQUE
+    );
+  ''';
+
+  static const String _playlistSongsTableDdl = '''
+    CREATE TABLE IF NOT EXISTS PLAYLIST_SONGS (
+      playlist_id  INTEGER NOT NULL REFERENCES PLAYLISTS(id) ON DELETE CASCADE,
+      song_path    TEXT    NOT NULL REFERENCES SONGS(path)   ON DELETE CASCADE,
+      position     INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (playlist_id, song_path)
+    );
+  ''';
+
   // ── PATHS helpers ─────────────────────────────────────────────────────────
 
-  /// Store or replace the single root folder path.
   Future<void> storeMainFolderPath(String folderPath) async {
     final db = await _getDb();
     await db.delete(_pathsTable);
@@ -77,20 +98,15 @@ class DatabaseService {
     );
   }
 
-  /// Get the stored root folder path, or null if none set.
   Future<String?> getMainFolderPath() async {
     final db = await _getDb();
     final rows = await db.query(_pathsTable);
-    if (rows.isNotEmpty) {
-      return rows.first['playlistspath'] as String?;
-    }
+    if (rows.isNotEmpty) return rows.first['playlistspath'] as String?;
     return null;
   }
 
   // ── SONGS helpers ─────────────────────────────────────────────────────────
 
-  /// Insert a new song or, if the path already exists, update all columns
-  /// except the primary key.
   Future<void> upsertSong(SongRecord record) async {
     final db = await _getDb();
     await db.insert(
@@ -100,8 +116,6 @@ class DatabaseService {
     );
   }
 
-  /// Insert many songs in a single transaction (much faster than looping
-  /// [upsertSong] for large batches).
   Future<void> upsertSongs(List<SongRecord> records) async {
     if (records.isEmpty) return;
     final db = await _getDb();
@@ -116,7 +130,6 @@ class DatabaseService {
     });
   }
 
-  /// Return the row for a specific audio file path, or null if not indexed.
   Future<SongRecord?> getSongByPath(String path) async {
     final db = await _getDb();
     final rows = await db.query(
@@ -129,21 +142,18 @@ class DatabaseService {
     return SongRecord.fromMap(rows.first);
   }
 
-  /// Return all indexed songs.
   Future<List<SongRecord>> getAllSongs() async {
     final db = await _getDb();
-    final rows = await db.query(_songsTable);
+    final rows = await db.query(_songsTable, orderBy: 'title ASC');
     return rows.map(SongRecord.fromMap).toList();
   }
 
-  /// Return all paths that are already indexed (cheap — no BLOB columns read).
   Future<Set<String>> getAllIndexedPaths() async {
     final db = await _getDb();
     final rows = await db.query(_songsTable, columns: ['path']);
     return rows.map((r) => r['path'] as String).toSet();
   }
 
-  /// Update just the folder_locations JSON for a song identified by [path].
   Future<void> updateSongFolderLocations(
       String audioPath, List<String> folderLocations) async {
     final db = await _getDb();
@@ -155,9 +165,93 @@ class DatabaseService {
     );
   }
 
-  /// Remove a song row by its audio file path.
   Future<void> deleteSongByPath(String path) async {
     final db = await _getDb();
     await db.delete(_songsTable, where: 'path = ?', whereArgs: [path]);
+  }
+
+  // ── PLAYLISTS helpers ─────────────────────────────────────────────────────
+
+  /// Create a new named playlist. Returns the new row id.
+  Future<int> createPlaylist(String name) async {
+    final db = await _getDb();
+    return db.insert(
+      _playlistsTable,
+      {'name': name},
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Delete a playlist and its song associations.
+  Future<void> deletePlaylist(int id) async {
+    final db = await _getDb();
+    // PLAYLIST_SONGS rows are removed by ON DELETE CASCADE if FK is enforced;
+    // delete them explicitly too for safety (sqflite doesn't always enforce FK).
+    await db.delete(_playlistSongsTable,
+        where: 'playlist_id = ?', whereArgs: [id]);
+    await db.delete(_playlistsTable, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Return all playlists ordered by name.
+  Future<List<Map<String, dynamic>>> getAllPlaylists() async {
+    final db = await _getDb();
+    return db.query(_playlistsTable, orderBy: 'name ASC');
+  }
+
+  /// Add a song (by path) to a playlist. No-op if already present.
+  Future<void> addSongToPlaylist(int playlistId, String songPath) async {
+    final db = await _getDb();
+    // Compute next position
+    final rows = await db.query(
+      _playlistSongsTable,
+      columns: ['MAX(position) as max_pos'],
+      where: 'playlist_id = ?',
+      whereArgs: [playlistId],
+    );
+    final maxPos = (rows.first['max_pos'] as int?) ?? -1;
+    await db.insert(
+      _playlistSongsTable,
+      {
+        'playlist_id': playlistId,
+        'song_path': songPath,
+        'position': maxPos + 1,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  /// Remove a song from a playlist.
+  Future<void> removeSongFromPlaylist(int playlistId, String songPath) async {
+    final db = await _getDb();
+    await db.delete(
+      _playlistSongsTable,
+      where: 'playlist_id = ? AND song_path = ?',
+      whereArgs: [playlistId, songPath],
+    );
+  }
+
+  /// Return all song records for a playlist, ordered by position.
+  Future<List<SongRecord>> getSongsForPlaylist(int playlistId) async {
+    final db = await _getDb();
+    final rows = await db.rawQuery('''
+      SELECT s.*
+      FROM $_songsTable s
+      INNER JOIN $_playlistSongsTable ps ON ps.song_path = s.path
+      WHERE ps.playlist_id = ?
+      ORDER BY ps.position ASC
+    ''', [playlistId]);
+    return rows.map(SongRecord.fromMap).toList();
+  }
+
+  /// Return the set of song paths already in a playlist (for checkbox state).
+  Future<Set<String>> getPathsInPlaylist(int playlistId) async {
+    final db = await _getDb();
+    final rows = await db.query(
+      _playlistSongsTable,
+      columns: ['song_path'],
+      where: 'playlist_id = ?',
+      whereArgs: [playlistId],
+    );
+    return rows.map((r) => r['song_path'] as String).toSet();
   }
 }

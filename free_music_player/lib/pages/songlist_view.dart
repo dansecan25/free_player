@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:free_music_player/components/add_to_playlist_dialog.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:provider/provider.dart';
@@ -133,7 +134,21 @@ class _SongListViewState extends State<SongListView> {
                   onChanged: _filterSongs,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(
+                  Icons.shuffle,
+                  size: 28,
+                  color: playlistProvider.isShuffling
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                tooltip: 'Shuffle',
+                onPressed: () {
+                  playlistProvider.shuffle();
+                  setState(() {});
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.swap_vert, size: 28),
                 tooltip: 'Reverse order',
@@ -157,63 +172,79 @@ class _SongListViewState extends State<SongListView> {
               final song = visibleSongs[index];
               final dpr = MediaQuery.of(context).devicePixelRatio;
 
-              return ListTile(
-                title: Text(song.songName),
-                subtitle: Text(song.artistName),
-                leading: ValueListenableBuilder<Uint8List?>(
-                  valueListenable: song.albumArtNotifier,
-                  builder: (context, albumImage, _) {
-                    if (albumImage == null) {
-                      return const Icon(Icons.music_note, size: 70);
-                    }
-                    return RepaintBoundary(
-                      child: Image.memory(
-                        albumImage,
-                        width: 75,
-                        height: 90,
-                        fit: BoxFit.cover,
-                        // Decode straight to the display size instead of
-                        // full original resolution -- decoding a full
-                        // ~1000px embedded cover just to shrink it to a
-                        // 75x90 tile is the expensive part that was
-                        // stalling the frame each time a new row scrolled
-                        // into view.
-                        cacheWidth: (75 * dpr).round(),
-                        cacheHeight: (90 * dpr).round(),
-                        gaplessPlayback: true,
-                      ),
-                    );
-                  },
-                ),
-                onTap: () => widget.onSongTap(song, index),
-                trailing: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) async {
-                    if (value == 'delete') {
-                      await playlistProvider.deleteSong(context, song, index);
-
-                      setState(() {
-                        widget.songs.removeWhere(
-                          (s) => s.audioPath.path == song.audioPath.path,
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(song.songName),
+                    subtitle: Text(song.artistName),
+                    leading: ValueListenableBuilder<Uint8List?>(
+                      valueListenable: song.albumArtNotifier,
+                      builder: (context, albumImage, _) {
+                        if (albumImage == null) {
+                          return const Icon(Icons.music_note, size: 70);
+                        }
+                        return RepaintBoundary(
+                          child: Image.memory(
+                            albumImage,
+                            width: 75,
+                            height: 90,
+                            fit: BoxFit.cover,
+                            cacheWidth: (75 * dpr).round(),
+                            cacheHeight: (90 * dpr).round(),
+                            gaplessPlayback: true,
+                          ),
                         );
-                        _filterSongs(searchQuery); // Refresh filtered list
-                      });
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete,
-                              color: Color.fromARGB(255, 255, 105, 94)),
-                          SizedBox(width: 8),
-                          Text('Delete'),
-                        ],
-                      ),
+                      },
                     ),
-                  ],
-                ),
+                    onTap: () => widget.onSongTap(song, index),
+                    trailing: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) async {
+                        if (value == 'add_to_playlist') {
+                          await showAddToPlaylistDialog(context, song);
+                        } else if (value == 'delete') {
+                          await playlistProvider.deleteSong(context, song, index);
+
+                          setState(() {
+                            widget.songs.removeWhere(
+                              (s) => s.audioPath.path == song.audioPath.path,
+                            );
+                            _filterSongs(searchQuery);
+                          });
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'add_to_playlist',
+                          child: Row(
+                            children: [
+                              Icon(Icons.playlist_add),
+                              SizedBox(width: 8),
+                              Text('Add to playlist'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete,
+                                  color: Color.fromARGB(255, 255, 105, 94)),
+                              SizedBox(width: 8),
+                              Text('Delete'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: Color(0x26000000),
+                  ),
+                ],
               );
             },
           ),
