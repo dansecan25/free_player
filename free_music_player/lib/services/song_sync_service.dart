@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:free_music_player/models/song_record.dart';
 import 'package:free_music_player/services/database_service.dart';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
@@ -34,16 +35,15 @@ class _RawSongInfo {
   });
 }
 
-/// Arguments passed into the background isolate as a single object so we can
-/// use [compute] (which only accepts one argument).
 class _ScanArgs {
   final String dirPath;
   _ScanArgs(this.dirPath);
 }
 
-/// Runs entirely on a background isolate. Scans [dirPath] for music files,
-/// reads all their metadata (including album art), and returns one
-/// [_RawSongInfo] per file.
+/// Runs entirely on a background isolate. Scans [dirPath] for music files and
+/// reads their text metadata + raw album-art bytes.
+/// Compression happens back on the main isolate (flutter_image_compress needs
+/// platform channels which are not available inside a compute isolate).
 List<_RawSongInfo> _scanAndReadMetadata(_ScanArgs args) {
   final dir = Directory(args.dirPath);
   final result = <_RawSongInfo>[];
@@ -52,7 +52,6 @@ List<_RawSongInfo> _scanAndReadMetadata(_ScanArgs args) {
     if (entity is! File || !_isMusicFilePath(entity.path)) continue;
 
     try {
-      // ── Text metadata ──────────────────────────────────────────────────
       final meta = readMetadata(entity, getImage: false);
       final author =
           meta.artist?.isNotEmpty == true ? meta.artist! : 'Unknown artist';
@@ -62,7 +61,6 @@ List<_RawSongInfo> _scanAndReadMetadata(_ScanArgs args) {
           .last
           .replaceAll(RegExp(r'\.(mp3|flac)$', caseSensitive: false), '');
 
-      // ── Album art ─────────────────────────────────────────────────────
       Uint8List? art;
       if (entity.path.toLowerCase().endsWith('.mp3')) {
         try {
@@ -82,10 +80,9 @@ List<_RawSongInfo> _scanAndReadMetadata(_ScanArgs args) {
         }
       }
 
-      final folderPath = args.dirPath;
       result.add(_RawSongInfo(
         path: entity.path,
-        folderPath: folderPath,
+        folderPath: args.dirPath,
         title: title,
         author: author,
         album: album,
@@ -100,35 +97,23 @@ List<_RawSongInfo> _scanAndReadMetadata(_ScanArgs args) {
 
 // ── SongSyncService ──────────────────────────────────────────────────────────
 
-/// Responsible for keeping the SONGS table up-to-date when the app opens.
+/// Keeps the SONGS table up-to-date when the app opens.
 ///
-/// Algorithm (per folder under the root music directory):
-///   1. Collect all music file paths in the folder.
-///   2. Query the DB for which of those paths are already indexed.
-///   3. For brand-new paths: read full metadata on a background isolate and
-///      insert them.
-///   4. For paths already indexed that now appear in a new folder: append that
-///      folder to their [folderLocations] list.
+/// For every new song it also creates a compressed `thumbnail_small`
+/// (~96×96 JPEG, ≤15 KB) so the playlist list can load artwork from a single
+/// DB query instead of decoding multi-hundred-KB embedded tags at scroll time.
 class SongSyncService {
   final DatabaseService _db;
 
   SongSyncService(this._db);
 
   /// Sync all songs found under [rootDir] and its immediate subdirectories.
-  /// Call this once during app initialisation (from [PlaylistProvider]).
   Future<void> syncLibrary(Directory rootDir) async {
     if (!rootDir.existsSync()) return;
 
-    // Collect all playlist directories (immediate sub-folders)
-    final folders = rootDir
-        .listSync()
-        .whereType<Directory>()
-        .toList();
-
-    // Also include the root itself if it has music files directly
+    final folders = rootDir.listSync().whereType<Directory>().toList();
     folders.insert(0, rootDir);
 
-    // Already-indexed paths (fast lookup)
     final indexedPaths = await _db.getAllIndexedPaths();
 
     for (final folder in folders) {
@@ -138,7 +123,6 @@ class SongSyncService {
 
   Future<void> _syncFolder(
       Directory folder, Set<String> indexedPaths) async {
-    // List all music files in this folder (non-recursive)
     final musicFiles = folder
         .listSync()
         .whereType<File>()
@@ -158,22 +142,19 @@ class SongSyncService {
       }
     }
 
-    // ── Insert brand-new songs ───────────────────────────────────────────
+    // ── Insert brand-new songs ─────────────────────────────────────────────
     if (newPaths.isNotEmpty) {
-      // Scan metadata on a background isolate
-      final rawList = await compute(
-        _scanAndReadMetadata,
-        _ScanArgs(folder.path),
-      );
+      final rawList = await compute(_scanAndReadMetadata, _ScanArgs(folder.path));
 
-      // Filter to only those that were actually new (the isolate scanned the
-      // whole folder, but some might have been indexed by a previous iteration
-      // of this loop when the same file appears in multiple folders).
       final newPathsSet = newPaths.toSet();
       final toInsert = <SongRecord>[];
 
       for (final raw in rawList) {
         if (!newPathsSet.contains(raw.path)) continue;
+
+        // Compress art on the main isolate (requires platform channels)
+        final small = await _compressArt(raw.thumbnailData);
+
         toInsert.add(SongRecord(
           title: raw.title,
           author: raw.author,
@@ -182,15 +163,15 @@ class SongSyncService {
           folderLocations: [raw.folderPath],
           playlists: null,
           thumbnailData: raw.thumbnailData,
+          thumbnailSmall: small,
         ));
-        // Mark as indexed so later folders don't re-insert the same file
         indexedPaths.add(raw.path);
       }
 
       await _db.upsertSongs(toInsert);
     }
 
-    // ── Update folder_locations for songs seen in a new folder ───────────
+    // ── Update folder_locations for songs seen in a new folder ─────────────
     for (final path in existingInNewFolder) {
       final record = await _db.getSongByPath(path);
       if (record == null) continue;
@@ -199,6 +180,33 @@ class SongSyncService {
         final updated = [...record.folderLocations, folderPath];
         await _db.updateSongFolderLocations(path, updated);
       }
+
+      // Back-fill thumbnail_small if it was stored before this feature existed
+      if (record.thumbnailSmall == null && record.thumbnailData != null) {
+        final small = await _compressArt(record.thumbnailData);
+        if (small != null) {
+          await _db.updateThumbnailSmall(path, small);
+        }
+      }
+    }
+  }
+
+  /// Compress [art] to a 96×96 JPEG at quality 75.
+  /// Returns null if art is null or compression fails.
+  static Future<Uint8List?> _compressArt(Uint8List? art) async {
+    if (art == null) return null;
+    try {
+      final result = await FlutterImageCompress.compressWithList(
+        art,
+        minWidth: 96,
+        minHeight: 96,
+        quality: 75,
+        format: CompressFormat.jpeg,
+      );
+      // Only use the compressed version if it's actually smaller
+      return result.length < art.length ? result : art;
+    } catch (_) {
+      return art; // fall back to original on error
     }
   }
 }

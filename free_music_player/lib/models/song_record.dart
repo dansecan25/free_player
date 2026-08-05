@@ -3,19 +3,20 @@ import 'dart:typed_data';
 
 /// Represents a row in the SONGS table.
 ///
-/// - [folderLocations] — every folder path that contains a file for this song
-///   (same song can live in multiple scanned folders).
-/// - [playlists] — reserved for a future manual-playlist feature; starts null.
-/// - [thumbnailData] — raw JPEG/PNG bytes of the embedded album art, or null.
+/// - [folderLocations] — every folder path that contains a file for this song.
+/// - [playlists] — reserved for future manual-playlist feature; starts null.
+/// - [thumbnailData] — full-res JPEG/PNG bytes of embedded album art, or null.
+/// - [thumbnailSmall] — ~96×96 compressed JPEG, used for fast list display.
 class SongRecord {
   final int? id;
   final String title;
   final String author;
   final String? album;
-  final String path; // canonical audio file path (primary key semantically)
+  final String path;
   final List<String> folderLocations;
-  final List<String>? playlists; // null until the playlist feature is added
+  final List<String>? playlists;
   final Uint8List? thumbnailData;
+  final Uint8List? thumbnailSmall;
 
   SongRecord({
     this.id,
@@ -26,6 +27,7 @@ class SongRecord {
     required this.folderLocations,
     this.playlists,
     this.thumbnailData,
+    this.thumbnailSmall,
   });
 
   // ── Serialisation helpers ────────────────────────────────────────────────
@@ -40,6 +42,7 @@ class SongRecord {
       'folder_locations': jsonEncode(folderLocations),
       'playlists': playlists != null ? jsonEncode(playlists) : null,
       'thumbnail_data': thumbnailData,
+      'thumbnail_small': thumbnailSmall,
     };
   }
 
@@ -56,9 +59,8 @@ class SongRecord {
       playlists: map['playlists'] != null
           ? List<String>.from(jsonDecode(map['playlists'] as String))
           : null,
-      thumbnailData: map['thumbnail_data'] != null
-          ? map['thumbnail_data'] as Uint8List
-          : null,
+      thumbnailData: map['thumbnail_data'] as Uint8List?,
+      thumbnailSmall: map['thumbnail_small'] as Uint8List?,
     );
   }
 }

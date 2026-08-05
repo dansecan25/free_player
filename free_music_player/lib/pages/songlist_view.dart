@@ -134,21 +134,6 @@ class _SongListViewState extends State<SongListView> {
                   onChanged: _filterSongs,
                 ),
               ),
-              const SizedBox(width: 4),
-              IconButton(
-                icon: Icon(
-                  Icons.shuffle,
-                  size: 28,
-                  color: playlistProvider.isShuffling
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                tooltip: 'Shuffle',
-                onPressed: () {
-                  playlistProvider.shuffle();
-                  setState(() {});
-                },
-              ),
               IconButton(
                 icon: const Icon(Icons.swap_vert, size: 28),
                 tooltip: 'Reverse order',
@@ -181,16 +166,16 @@ class _SongListViewState extends State<SongListView> {
                       valueListenable: song.albumArtNotifier,
                       builder: (context, albumImage, _) {
                         if (albumImage == null) {
-                          return const Icon(Icons.music_note, size: 70);
+                          return const Icon(Icons.music_note, size: 48);
                         }
                         return RepaintBoundary(
                           child: Image.memory(
                             albumImage,
-                            width: 75,
-                            height: 90,
+                            width: 48,
+                            height: 48,
                             fit: BoxFit.cover,
-                            cacheWidth: (75 * dpr).round(),
-                            cacheHeight: (90 * dpr).round(),
+                            cacheWidth: (48 * dpr).round(),
+                            cacheHeight: (48 * dpr).round(),
                             gaplessPlayback: true,
                           ),
                         );

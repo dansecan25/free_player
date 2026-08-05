@@ -26,6 +26,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   List<Song> _filtered = [];
   bool _loading = true;
   String _searchQuery = '';
+  bool _isReversed = false;
 
   @override
   void initState() {
@@ -60,7 +61,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   Song _toSong(SongRecord r) => Song(
         songName: r.title,
         artistName: r.author,
-        albumArtImagePathBytes: r.thumbnailData,
+        albumArtImagePathBytes: r.thumbnailSmall ?? r.thumbnailData,
         audioPath: File(r.path),
       );
 
@@ -119,7 +120,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _DetailSkeleton()
           : _songs.isEmpty
               ? const Center(
                   child: Text(
@@ -130,7 +131,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                 )
               : Column(
                   children: [
-                    // ── Search + Shuffle bar ─────────────────────────────
+                    // ── Search + Sort bar ────────────────────────────────
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 8, 4, 4),
                       child: Row(
@@ -147,23 +148,15 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                               onChanged: _filterSongs,
                             ),
                           ),
-                          Builder(
-                            builder: (ctx) {
-                              final provider = Provider.of<PlaylistProvider>(
-                                  ctx, listen: false);
-                              return IconButton(
-                                icon: Icon(
-                                  Icons.shuffle,
-                                  color: provider.isShuffling
-                                      ? Theme.of(ctx).colorScheme.primary
-                                      : null,
-                                ),
-                                tooltip: 'Shuffle',
-                                onPressed: () {
-                                  provider.shuffle();
-                                  setState(() {});
-                                },
-                              );
+                          IconButton(
+                            icon: const Icon(Icons.swap_vert, size: 28),
+                            tooltip: 'Reverse order',
+                            onPressed: () {
+                              setState(() {
+                                _isReversed = !_isReversed;
+                                _filtered = _filtered.reversed.toList();
+                                _songs = _songs.reversed.toList();
+                              });
                             },
                           ),
                         ],
@@ -417,6 +410,107 @@ class _SongPickerSheetState extends State<_SongPickerSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Skeleton loading list (mirrors playlist_songs_page skeleton) ──────────────
+
+class _DetailSkeleton extends StatefulWidget {
+  const _DetailSkeleton();
+
+  @override
+  State<_DetailSkeleton> createState() => _DetailSkeletonState();
+}
+
+class _DetailSkeletonState extends State<_DetailSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context).colorScheme.onSurface;
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) {
+        final shimmer = base.withAlpha((20 + (_anim.value * 30)).round());
+        return ListView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: 12,
+          itemBuilder: (_, __) => _DetailSkeletonTile(color: shimmer),
+        );
+      },
+    );
+  }
+}
+
+class _DetailSkeletonTile extends StatelessWidget {
+  final Color color;
+  const _DetailSkeletonTile({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 13,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 11,
+                      width: 120,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, indent: 16, endIndent: 16, color: color),
+      ],
     );
   }
 }

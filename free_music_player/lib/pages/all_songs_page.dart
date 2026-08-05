@@ -21,7 +21,7 @@ class _AllSongsPageState extends State<AllSongsPage> {
   List<Song> _filtered = [];
   bool _loading = true;
   String _query = '';
-  bool _isShuffling = false;
+  bool _isReversed = false;
 
   @override
   void initState() {
@@ -93,19 +93,14 @@ class _AllSongsPageState extends State<AllSongsPage> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(
-                    Icons.shuffle,
-                    color: _isShuffling
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                  tooltip: 'Shuffle',
+                  icon: const Icon(Icons.swap_vert, size: 28),
+                  tooltip: 'Reverse order',
                   onPressed: () {
-                    final provider = Provider.of<PlaylistProvider>(
-                        context,
-                        listen: false);
-                    provider.shuffle();
-                    setState(() => _isShuffling = provider.isShuffling);
+                    setState(() {
+                      _isReversed = !_isReversed;
+                      _filtered = _filtered.reversed.toList();
+                      _allSongs = _allSongs.reversed.toList();
+                    });
                   },
                 ),
               ],

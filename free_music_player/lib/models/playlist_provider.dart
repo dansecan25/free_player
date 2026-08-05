@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
@@ -648,56 +649,46 @@ class PlaylistProvider extends ChangeNotifier {
     return counter;
   }
 
-  /// Loads songs for a playlist using the SONGS table as the primary source.
+  /// Loads songs for a playlist from a single DB query.
   ///
-  /// For each music file in [path]:
-  ///   • If a DB record exists → use its stored title, author, album, and
-  ///     thumbnail (no file I/O beyond playing the audio).
-  ///   • If no DB record exists (edge case — sync should have run) → fall
-  ///     back to reading tags from the file, then insert into DB.
+  /// Phase 1 (sync, fast): one SQL query fetches all rows whose
+  /// folder_locations contains [path]. Each song gets its compressed
+  /// thumbnail_small immediately, so the list shows thumbnails on first
+  /// render with zero extra I/O.
   ///
-  /// Album art from the DB is applied immediately so the UI shows it as soon
-  /// as the list appears. For songs without cached art, the background art
-  /// loader still runs as before (fire-and-forget), and also writes the
-  /// result back to the DB for next time.
+  /// Phase 2 (async, fire-and-forget): songs whose thumbnail_small is still
+  /// null (brand-new additions since last sync) get their art decoded from
+  /// the file on a background isolate and written back to DB.
   Future<List<Song>> setSongsForPlaylist(
     Directory path, {
     void Function(List<Song> updatedBatch)? onArtworkBatchLoaded,
   }) async {
-    // ── Phase 1: fast metadata scan (background isolate) ────────────────
-    final stubs = await compute(_scanPlaylistMetadata, path.path);
+    // ── Phase 1: single DB query — O(1) regardless of playlist size ──────
+    final records = await dbService.getSongsForFolder(path.path);
 
-    final songs = <Song>[];
-    final pathsNeedingArt = <String>[];
-
-    for (final stub in stubs) {
-      // Try to load metadata and thumbnail from DB first
-      final record = await dbService.getSongByPath(stub.audioPath);
-
-      if (record != null) {
-        songs.add(Song(
-          songName: record.title,
-          artistName: record.author,
-          albumArtImagePathBytes: record.thumbnailData,
-          audioPath: File(record.path),
-        ));
-        // If the DB row has no thumbnail, queue for background load
-        if (record.thumbnailData == null) {
-          pathsNeedingArt.add(stub.audioPath);
-        }
-      } else {
-        // No DB record yet — use the scanned stub and add to DB later
-        songs.add(Song(
-          songName: stub.songName,
-          artistName: stub.artistName,
-          albumArtImagePathBytes: null,
-          audioPath: File(stub.audioPath),
-        ));
-        pathsNeedingArt.add(stub.audioPath);
-      }
+    // Fall back to file scan only when the folder has no DB entries yet
+    // (first run before sync has completed).
+    if (records.isEmpty) {
+      return _setSongsForPlaylistFallback(path,
+          onArtworkBatchLoaded: onArtworkBatchLoaded);
     }
 
-    // ── Phase 2: background art load for songs that still need it ────────
+    final songs = records
+        .map((r) => Song(
+              songName: r.title,
+              artistName: r.author,
+              // Use compressed thumbnail for list display
+              albumArtImagePathBytes: r.thumbnailSmall ?? r.thumbnailData,
+              audioPath: File(r.path),
+            ))
+        .toList();
+
+    // ── Phase 2: back-fill art for any rows still missing it ─────────────
+    final pathsNeedingArt = records
+        .where((r) => r.thumbnailSmall == null && r.thumbnailData == null)
+        .map((r) => r.path)
+        .toList();
+
     if (pathsNeedingArt.isNotEmpty) {
       _loadAlbumArtInBackground(
         songs,
@@ -710,22 +701,38 @@ class PlaylistProvider extends ChangeNotifier {
     return songs;
   }
 
-  /// Decodes album art for [songs] in small batches on background isolates,
-  /// mutating each Song's art field in place as results come back.
-  ///
-  /// [pathFilter] — if provided, only songs whose path is in this set are
-  /// processed (songs that already have art from the DB are skipped).
-  ///
-  /// [persistToDb] — when true, the newly decoded art is written back to the
-  /// SONGS table so the next load is instant.
+  /// Fallback used on the very first open (before sync has run).
+  /// Scans the directory on a background isolate and populates the DB.
+  Future<List<Song>> _setSongsForPlaylistFallback(
+    Directory path, {
+    void Function(List<Song> updatedBatch)? onArtworkBatchLoaded,
+  }) async {
+    final stubs = await compute(_scanPlaylistMetadata, path.path);
+    final songs = stubs
+        .map((s) => Song(
+              songName: s.songName,
+              artistName: s.artistName,
+              albumArtImagePathBytes: null,
+              audioPath: File(s.audioPath),
+            ))
+        .toList();
+    _loadAlbumArtInBackground(
+      songs,
+      onBatchLoaded: onArtworkBatchLoaded,
+      persistToDb: true,
+    );
+    return songs;
+  }
+
+  /// Decodes album art for songs that still need it, in batches on a
+  /// background isolate, updating each Song's notifier in-place.
+  /// When [persistToDb] is true, also compresses and writes back to DB.
   Future<void> _loadAlbumArtInBackground(
     List<Song> songs, {
     Set<String>? pathFilter,
     void Function(List<Song> batch)? onBatchLoaded,
     bool persistToDb = false,
   }) async {
-    // Aligned with SongListView's page size so a freshly-revealed page of
-    // songs tends to get its artwork in one shot rather than half-loaded.
     const batchSize = 10;
 
     final targetSongs = pathFilter != null
@@ -745,19 +752,22 @@ class PlaylistProvider extends ChangeNotifier {
           final art = artByPath[song.audioPath.path];
           song.albumArtImagePathBytes = art;
 
-          // Persist the decoded art (and any missing DB row) back to DB
-          if (persistToDb) {
+          if (persistToDb && art != null) {
             final existing = await dbService.getSongByPath(song.audioPath.path);
-            if (existing != null && art != null) {
-              // Update thumbnail only if it was missing before
+            if (existing != null) {
               if (existing.thumbnailData == null) {
                 await dbService.upsertSong(existing.copyWith(thumbnailData: art));
               }
-            }
-            // If there's no record at all, insert a minimal one now
-            if (existing == null) {
+              if (existing.thumbnailSmall == null) {
+                final small = await _SongSyncCompressor.compress(art);
+                if (small != null) {
+                  await dbService.updateThumbnailSmall(song.audioPath.path, small);
+                }
+              }
+            } else {
+              final small = await _SongSyncCompressor.compress(art);
               await dbService.upsertSong(
-                _SongRecordHelper.fromSong(song, art),
+                _SongRecordHelper.fromSong(song, art, small),
               );
             }
           }
@@ -803,6 +813,7 @@ extension _SongRecordCopy on SongRecord {
     List<String>? folderLocations,
     List<String>? playlists,
     Uint8List? thumbnailData,
+    Uint8List? thumbnailSmall,
   }) {
     return SongRecord(
       id: id ?? this.id,
@@ -813,20 +824,39 @@ extension _SongRecordCopy on SongRecord {
       folderLocations: folderLocations ?? this.folderLocations,
       playlists: playlists ?? this.playlists,
       thumbnailData: thumbnailData ?? this.thumbnailData,
+      thumbnailSmall: thumbnailSmall ?? this.thumbnailSmall,
     );
   }
 }
 
 class _SongRecordHelper {
-  static SongRecord fromSong(Song song, Uint8List? art) {
+  static SongRecord fromSong(Song song, Uint8List? art, Uint8List? small) {
     return SongRecord(
       title: song.songName,
       author: song.artistName,
       path: song.audioPath.path,
-      folderLocations: [
-        song.audioPath.parent.path,
-      ],
+      folderLocations: [song.audioPath.parent.path],
       thumbnailData: art,
+      thumbnailSmall: small,
     );
+  }
+}
+
+/// Thin wrapper so [PlaylistProvider] can call compression without importing
+/// song_sync_service directly.
+class _SongSyncCompressor {
+  static Future<Uint8List?> compress(Uint8List art) async {
+    try {
+      final result = await FlutterImageCompress.compressWithList(
+        art,
+        minWidth: 96,
+        minHeight: 96,
+        quality: 75,
+        format: CompressFormat.jpeg,
+      );
+      return result.length < art.length ? result : art;
+    } catch (_) {
+      return null;
+    }
   }
 }

@@ -1,7 +1,7 @@
 name: free_music_player
 description: "A personally created music player with no commercial interest at the moment."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.1.1+3
 
 environment:
   sdk: ^3.11.5
@@ -26,6 +26,7 @@ dependencies:
   audio_metadata_reader: ^1.4.2
   dart_tags: ^0.4.1
   id3: ^1.0.2
+  flutter_image_compress: ^2.3.0
   path_provider: ^2.1.5
   shared_preferences: ^2.3.3
 

@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:free_music_player/models/song_record.dart';
 
 class DatabaseService {
   static const String _databaseName = "freeplayer.db";
-  static const int _databaseVersion = 3;
+  static const int _databaseVersion = 4;
 
   // ── Table names ───────────────────────────────────────────────────────────
   static const String _pathsTable        = 'PATHS';
@@ -55,6 +56,11 @@ class DatabaseService {
       await db.execute(_playlistsTableDdl);
       await db.execute(_playlistSongsTableDdl);
     }
+    if (oldVersion < 4) {
+      // Add compressed thumbnail column (nullable — filled lazily on next sync)
+      await db.execute(
+          'ALTER TABLE SONGS ADD COLUMN thumbnail_small BLOB');
+    }
   }
 
   static const String _songsTableDdl = '''
@@ -66,7 +72,8 @@ class DatabaseService {
       path             TEXT    NOT NULL UNIQUE,
       folder_locations TEXT    NOT NULL DEFAULT '[]',
       playlists        TEXT,
-      thumbnail_data   BLOB
+      thumbnail_data   BLOB,
+      thumbnail_small  BLOB
     );
   ''';
 
@@ -170,6 +177,66 @@ class DatabaseService {
     await db.delete(_songsTable, where: 'path = ?', whereArgs: [path]);
   }
 
+  /// Return all songs whose folder_locations JSON contains [folderPath].
+  /// Single SQL query — replaces N calls to [getSongByPath].
+  /// Returns only the columns needed for display (no full thumbnail_data BLOB
+  /// unless [includeFullArt] is true) to keep the initial load fast.
+  Future<List<SongRecord>> getSongsForFolder(
+    String folderPath, {
+    bool includeFullArt = false,
+  }) async {
+    final db = await _getDb();
+    // Use JSON fragment search — folder_locations is stored as a JSON array
+    // of strings, so any row containing the path as a JSON string value will
+    // have a fragment like  ..."<folderPath>"...
+    final escapedPath = folderPath.replaceAll('"', '\\"');
+    final columns = includeFullArt
+        ? null // all columns
+        : <String>[
+            'id', 'title', 'author', 'album', 'path',
+            'folder_locations', 'playlists', 'thumbnail_small',
+          ];
+    final rows = await db.query(
+      _songsTable,
+      columns: columns,
+      where: "folder_locations LIKE ?",
+      whereArgs: ['%"$escapedPath"%'],
+      orderBy: 'title ASC',
+    );
+    return rows.map((r) {
+      // When we excluded thumbnail_data, reconstruct SongRecord with null for it
+      if (!includeFullArt) {
+        return SongRecord(
+          id: r['id'] as int?,
+          title: r['title'] as String,
+          author: r['author'] as String,
+          album: r['album'] as String?,
+          path: r['path'] as String,
+          folderLocations: r['folder_locations'] != null
+              ? List<String>.from(jsonDecode(r['folder_locations'] as String))
+              : [],
+          playlists: r['playlists'] != null
+              ? List<String>.from(jsonDecode(r['playlists'] as String))
+              : null,
+          thumbnailData: null, // not loaded — use thumbnailSmall
+          thumbnailSmall: r['thumbnail_small'] as Uint8List?,
+        );
+      }
+      return SongRecord.fromMap(r);
+    }).toList();
+  }
+
+  /// Update the compressed thumbnail for a song.
+  Future<void> updateThumbnailSmall(String path, Uint8List bytes) async {
+    final db = await _getDb();
+    await db.update(
+      _songsTable,
+      {'thumbnail_small': bytes},
+      where: 'path = ?',
+      whereArgs: [path],
+    );
+  }
+
   // ── PLAYLISTS helpers ─────────────────────────────────────────────────────
 
   /// Create a new named playlist. Returns the new row id.
@@ -231,16 +298,34 @@ class DatabaseService {
   }
 
   /// Return all song records for a playlist, ordered by position.
+  /// Selects only the lightweight columns — skips [thumbnail_data] (the full
+  /// embedded art BLOB) and uses [thumbnail_small] instead so the list
+  /// appears instantly without reading megabytes of image data per row.
   Future<List<SongRecord>> getSongsForPlaylist(int playlistId) async {
     final db = await _getDb();
     final rows = await db.rawQuery('''
-      SELECT s.*
+      SELECT s.id, s.title, s.author, s.album, s.path,
+             s.folder_locations, s.playlists, s.thumbnail_small
       FROM $_songsTable s
       INNER JOIN $_playlistSongsTable ps ON ps.song_path = s.path
       WHERE ps.playlist_id = ?
       ORDER BY ps.position ASC
     ''', [playlistId]);
-    return rows.map(SongRecord.fromMap).toList();
+    return rows.map((r) => SongRecord(
+      id: r['id'] as int?,
+      title: r['title'] as String,
+      author: r['author'] as String,
+      album: r['album'] as String?,
+      path: r['path'] as String,
+      folderLocations: r['folder_locations'] != null
+          ? List<String>.from(jsonDecode(r['folder_locations'] as String))
+          : [],
+      playlists: r['playlists'] != null
+          ? List<String>.from(jsonDecode(r['playlists'] as String))
+          : null,
+      thumbnailData: null,
+      thumbnailSmall: r['thumbnail_small'] as Uint8List?,
+    )).toList();
   }
 
   /// Return the set of song paths already in a playlist (for checkbox state).
