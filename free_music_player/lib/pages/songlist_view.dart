@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:free_music_player/components/add_to_playlist_dialog.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:provider/provider.dart';
@@ -24,13 +25,17 @@ class _SongListViewState extends State<SongListView> {
   List<Song> visibleSongs = [];
   bool isLoadingMore = false;
   String searchQuery = '';
-  final int itemsPerPage = 12;
-  bool isReversed = false; // for rendering order inversion
+  bool isReversed = false;
+  final int itemsPerPage = 10; // matches PlaylistProvider's artwork batch size
 
   @override
   void initState() {
     super.initState();
-    filteredSongs = List.from(widget.songs);
+    _loadSortState();
+    filteredSongs = widget.songs;
+    if (isReversed) {
+      filteredSongs = filteredSongs.reversed.toList();
+    }
     _initializeVisibleSongs();
 
     _scrollController.addListener(() {
@@ -43,10 +48,15 @@ class _SongListViewState extends State<SongListView> {
     });
   }
 
+  void _loadSortState() {
+    final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+    if (playlistProvider.stateService != null) {
+      isReversed = playlistProvider.stateService!.getSortReversed();
+    }
+  }
+
   void _initializeVisibleSongs() {
-    List<Song> songsToRender =
-        isReversed ? filteredSongs.reversed.toList() : filteredSongs;
-    visibleSongs = songsToRender.take(itemsPerPage).toList();
+    visibleSongs = filteredSongs.take(itemsPerPage).toList();
   }
 
   void _loadMoreSongs() {
@@ -54,12 +64,13 @@ class _SongListViewState extends State<SongListView> {
       isLoadingMore = true;
     });
 
-    Future.delayed(const Duration(milliseconds: 100), () {
-      List<Song> songsToRender =
-          isReversed ? filteredSongs.reversed.toList() : filteredSongs;
+    // Schedule after the current frame instead of an arbitrary delay --
+    // avoids doing the list update mid-scroll-gesture without adding a
+    // fixed stall on top of it.
+    Future.microtask(() {
+      if (!mounted) return;
       final nextItems =
-          songsToRender.skip(visibleSongs.length).take(itemsPerPage).toList();
-
+          filteredSongs.skip(visibleSongs.length).take(itemsPerPage).toList();
       setState(() {
         visibleSongs.addAll(nextItems);
         isLoadingMore = false;
@@ -74,8 +85,24 @@ class _SongListViewState extends State<SongListView> {
           .where((song) =>
               song.songName.toLowerCase().contains(query.toLowerCase()))
           .toList();
+      if (isReversed) {
+        filteredSongs = filteredSongs.reversed.toList();
+      }
       _initializeVisibleSongs();
-      _scrollController.jumpTo(0); // scroll to top after search
+    });
+  }
+
+  void _toggleSortOrder() {
+    setState(() {
+      isReversed = !isReversed;
+      filteredSongs = filteredSongs.reversed.toList();
+      _initializeVisibleSongs();
+      
+      // Save sort state
+      final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
+      if (playlistProvider.stateService != null) {
+        playlistProvider.stateService!.saveSortReversed(isReversed);
+      }
     });
   }
 
@@ -87,12 +114,10 @@ class _SongListViewState extends State<SongListView> {
 
   @override
   Widget build(BuildContext context) {
-    final playlistProvider =
-        Provider.of<PlaylistProvider>(context, listen: false);
+    final playlistProvider = Provider.of<PlaylistProvider>(context, listen: false);
 
     return Column(
       children: [
-        // Header: Search + invert order button
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
@@ -109,17 +134,10 @@ class _SongListViewState extends State<SongListView> {
                   onChanged: _filterSongs,
                 ),
               ),
-              const SizedBox(width: 8),
               IconButton(
-                onPressed: () {
-                  setState(() {
-                    isReversed = !isReversed;
-                    _initializeVisibleSongs();
-                    _scrollController.jumpTo(0);
-                  });
-                },
-                icon: const Icon(Icons.swap_vert),
-                tooltip: 'Invert display order',
+                icon: const Icon(Icons.swap_vert, size: 28),
+                tooltip: 'Reverse order',
+                onPressed: _toggleSortOrder,
               ),
             ],
           ),
@@ -137,48 +155,81 @@ class _SongListViewState extends State<SongListView> {
               }
 
               final song = visibleSongs[index];
-              Uint8List? albumImage = song.albumArtImagePathBytes;
+              final dpr = MediaQuery.of(context).devicePixelRatio;
 
-              return ListTile(
-                title: Text(song.songName),
-                subtitle: Text(song.artistName),
-                leading: albumImage != null
-                    ? Image.memory(
-                        albumImage,
-                        width: 75,
-                        height: 90,
-                        fit: BoxFit.cover,
-                      )
-                    : const Icon(Icons.music_note, size: 70),
-                onTap: () => widget.onSongTap(song, index),
-                trailing: PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) async {
-                    if (value == 'delete') {
-                      await playlistProvider.deleteSong(context, song, index);
-
-                      setState(() {
-                        widget.songs.removeWhere(
-                          (s) => s.audioPath.path == song.audioPath.path,
+              return Column(
+                children: [
+                  ListTile(
+                    title: Text(song.songName),
+                    subtitle: Text(song.artistName),
+                    leading: ValueListenableBuilder<Uint8List?>(
+                      valueListenable: song.albumArtNotifier,
+                      builder: (context, albumImage, _) {
+                        if (albumImage == null) {
+                          return const Icon(Icons.music_note, size: 48);
+                        }
+                        return RepaintBoundary(
+                          child: Image.memory(
+                            albumImage,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.cover,
+                            cacheWidth: (48 * dpr).round(),
+                            cacheHeight: (48 * dpr).round(),
+                            gaplessPlayback: true,
+                          ),
                         );
-                        _filterSongs(searchQuery); // Refresh filtered list
-                      });
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete,
-                              color: Color.fromARGB(255, 255, 105, 94)),
-                          SizedBox(width: 8),
-                          Text('Delete'),
-                        ],
-                      ),
+                      },
                     ),
-                  ],
-                ),
+                    onTap: () => widget.onSongTap(song, index),
+                    trailing: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (value) async {
+                        if (value == 'add_to_playlist') {
+                          await showAddToPlaylistDialog(context, song);
+                        } else if (value == 'delete') {
+                          await playlistProvider.deleteSong(context, song, index);
+
+                          setState(() {
+                            widget.songs.removeWhere(
+                              (s) => s.audioPath.path == song.audioPath.path,
+                            );
+                            _filterSongs(searchQuery);
+                          });
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'add_to_playlist',
+                          child: Row(
+                            children: [
+                              Icon(Icons.playlist_add),
+                              SizedBox(width: 8),
+                              Text('Add to playlist'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete,
+                                  color: Color.fromARGB(255, 255, 105, 94)),
+                              SizedBox(width: 8),
+                              Text('Delete'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: Color(0x26000000),
+                  ),
+                ],
               );
             },
           ),

@@ -1,18 +1,18 @@
 #To add items 1.0.0
-1. Encrypt database data
+1. Encrypt database data []
 2. Play songs [x]
 3. Player on playlists and songs view [x]
 4. Obtain author from metadata and image [x]
 5. Keep Playing music on background [x]
 6. Widget with player controls[x]
-7. App icon
-8. Deploy version 1.0.0 on Google play store
+7. App icon []
+8. Deploy version 1.0.0 on Google play store []
 9. Image on each song tyle [x]
-10. Reorder song list by name
+10. Reorder song list by name []
 11. Delete files from song list [x]
 12. Repeat functionalities [x]
-13. Shuffle list
-14. Invert order of list
+13. Shuffle list [x]
+14. Invert order of list [x]
 15. 
 
 #Release 2.0.0
