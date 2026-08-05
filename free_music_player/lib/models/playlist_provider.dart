@@ -5,11 +5,13 @@ import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:free_music_player/services/audio_handler.dart';
 import 'package:free_music_player/services/playback_state_service.dart';
+import 'package:free_music_player/services/song_sync_service.dart';
 import 'package:id3/id3.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/models/playlist.dart';
 import 'package:free_music_player/models/song.dart';
+import 'package:free_music_player/models/song_record.dart';
 import 'package:free_music_player/services/database_service.dart';
 import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'dart:async';
@@ -89,6 +91,8 @@ Map<String, Uint8List?> _extractAlbumArtBatch(List<String> paths) {
 
 class PlaylistProvider extends ChangeNotifier {
   final dbService = DatabaseService();
+  late final SongSyncService _syncService;
+
   String _musicDirectoryPath = "";
   List<List<Song>> _songList = [];
   final List<String> _playlistNames = [];
@@ -178,6 +182,7 @@ class PlaylistProvider extends ChangeNotifier {
   
 
   PlaylistProvider(this.audioHandler, {this.stateService}) {
+    _syncService = SongSyncService(dbService);
     initializeMusicDirectory();
     _listenToDuration();
     _restorePlaybackState();
@@ -413,6 +418,9 @@ class PlaylistProvider extends ChangeNotifier {
         await file.delete();
       }
 
+      // Remove from SONGS table
+      await dbService.deleteSongByPath(songObject.audioPath.path);
+
       // Remove song from current playlist in memory and update count
       for (var playlist in _playlists) {
         final initialLength = playlist.playlistSongs?.length ?? 0;
@@ -471,6 +479,9 @@ class PlaylistProvider extends ChangeNotifier {
         break;
       }
     }
+
+    // Remove from DB
+    await dbService.deleteSongByPath(song.audioPath.path);
 
     // notify listeners to update UI
     notifyListeners();
@@ -570,7 +581,8 @@ class PlaylistProvider extends ChangeNotifier {
 
     if (storedPath != null && storedPath.isNotEmpty) {
       _musicDirectoryPath = storedPath;
-      //sets the albums 
+      // Sync library first, then build playlists
+      await _syncService.syncLibrary(Directory(storedPath));
       setSongList();
     }
     notifyListeners();
@@ -584,8 +596,11 @@ class PlaylistProvider extends ChangeNotifier {
   void setMusicDirectory(String path) {
     dbService.storeMainFolderPath(path);
     _musicDirectoryPath = path;
-    setSongList();
-    notifyListeners();
+    // Sync library before building playlists
+    _syncService.syncLibrary(Directory(path)).then((_) {
+      setSongList();
+      notifyListeners();
+    });
   }
 
   void setSongList() async {
@@ -622,7 +637,7 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<int> _countSongs(Directory dirPath)async{
+  Future<int> _countSongs(Directory dirPath) async {
     int counter = 0;
     List<FileSystemEntity> entities = dirPath.listSync();
     for (var entity in entities){
@@ -633,62 +648,119 @@ class PlaylistProvider extends ChangeNotifier {
     return counter;
   }
 
-  /// Loads the songs for a playlist and returns almost immediately.
+  /// Loads songs for a playlist using the SONGS table as the primary source.
   ///
-  /// Phase 1 (awaited here): scan the directory for metadata only
-  /// (name/artist) on a background isolate via [compute]. This is fast and
-  /// never touches album art, so the UI can show the full song list and
-  /// let the user tap/play any song right away.
+  /// For each music file in [path]:
+  ///   • If a DB record exists → use its stored title, author, album, and
+  ///     thumbnail (no file I/O beyond playing the audio).
+  ///   • If no DB record exists (edge case — sync should have run) → fall
+  ///     back to reading tags from the file, then insert into DB.
   ///
-  /// Phase 2 (fire-and-forget): album art is decoded in small batches on a
-  /// background isolate and filled into the returned [Song] objects as it
-  /// becomes available. If [onArtworkBatchLoaded] is given, it's called
-  /// after every batch instead of the app-wide [notifyListeners] -- this
-  /// lets a single page (e.g. a playlist's song list) repaint itself as art
-  /// streams in without force-rebuilding every other Provider listener in
-  /// the app (media controls, other pages, etc.) on every batch.
+  /// Album art from the DB is applied immediately so the UI shows it as soon
+  /// as the list appears. For songs without cached art, the background art
+  /// loader still runs as before (fire-and-forget), and also writes the
+  /// result back to the DB for next time.
   Future<List<Song>> setSongsForPlaylist(
     Directory path, {
     void Function(List<Song> updatedBatch)? onArtworkBatchLoaded,
   }) async {
+    // ── Phase 1: fast metadata scan (background isolate) ────────────────
     final stubs = await compute(_scanPlaylistMetadata, path.path);
 
-    final songs = stubs
-        .map((s) => Song(
-              songName: s.songName,
-              artistName: s.artistName,
-              albumArtImagePathBytes: null,
-              audioPath: File(s.audioPath),
-            ))
-        .toList();
+    final songs = <Song>[];
+    final pathsNeedingArt = <String>[];
 
-    // Don't await: let artwork stream in the background while the caller
-    // already has a fully usable (art-less) song list to display.
-    _loadAlbumArtInBackground(songs, onBatchLoaded: onArtworkBatchLoaded);
+    for (final stub in stubs) {
+      // Try to load metadata and thumbnail from DB first
+      final record = await dbService.getSongByPath(stub.audioPath);
+
+      if (record != null) {
+        songs.add(Song(
+          songName: record.title,
+          artistName: record.author,
+          albumArtImagePathBytes: record.thumbnailData,
+          audioPath: File(record.path),
+        ));
+        // If the DB row has no thumbnail, queue for background load
+        if (record.thumbnailData == null) {
+          pathsNeedingArt.add(stub.audioPath);
+        }
+      } else {
+        // No DB record yet — use the scanned stub and add to DB later
+        songs.add(Song(
+          songName: stub.songName,
+          artistName: stub.artistName,
+          albumArtImagePathBytes: null,
+          audioPath: File(stub.audioPath),
+        ));
+        pathsNeedingArt.add(stub.audioPath);
+      }
+    }
+
+    // ── Phase 2: background art load for songs that still need it ────────
+    if (pathsNeedingArt.isNotEmpty) {
+      _loadAlbumArtInBackground(
+        songs,
+        pathFilter: pathsNeedingArt.toSet(),
+        onBatchLoaded: onArtworkBatchLoaded,
+        persistToDb: true,
+      );
+    }
 
     return songs;
   }
 
   /// Decodes album art for [songs] in small batches on background isolates,
-  /// mutating each Song's art field in place as results come back. Calls
-  /// [onBatchLoaded] with the updated batch after each one if provided,
-  /// otherwise falls back to the app-wide [notifyListeners].
+  /// mutating each Song's art field in place as results come back.
+  ///
+  /// [pathFilter] — if provided, only songs whose path is in this set are
+  /// processed (songs that already have art from the DB are skipped).
+  ///
+  /// [persistToDb] — when true, the newly decoded art is written back to the
+  /// SONGS table so the next load is instant.
   Future<void> _loadAlbumArtInBackground(
     List<Song> songs, {
+    Set<String>? pathFilter,
     void Function(List<Song> batch)? onBatchLoaded,
+    bool persistToDb = false,
   }) async {
     // Aligned with SongListView's page size so a freshly-revealed page of
     // songs tends to get its artwork in one shot rather than half-loaded.
     const batchSize = 10;
-    for (int i = 0; i < songs.length; i += batchSize) {
-      final end = (i + batchSize < songs.length) ? i + batchSize : songs.length;
-      final batch = songs.sublist(i, end);
+
+    final targetSongs = pathFilter != null
+        ? songs.where((s) => pathFilter.contains(s.audioPath.path)).toList()
+        : songs;
+
+    for (int i = 0; i < targetSongs.length; i += batchSize) {
+      final end = (i + batchSize < targetSongs.length)
+          ? i + batchSize
+          : targetSongs.length;
+      final batch = targetSongs.sublist(i, end);
       final paths = batch.map((s) => s.audioPath.path).toList();
 
       try {
         final artByPath = await compute(_extractAlbumArtBatch, paths);
         for (final song in batch) {
-          song.albumArtImagePathBytes = artByPath[song.audioPath.path];
+          final art = artByPath[song.audioPath.path];
+          song.albumArtImagePathBytes = art;
+
+          // Persist the decoded art (and any missing DB row) back to DB
+          if (persistToDb) {
+            final existing = await dbService.getSongByPath(song.audioPath.path);
+            if (existing != null && art != null) {
+              // Update thumbnail only if it was missing before
+              if (existing.thumbnailData == null) {
+                await dbService.upsertSong(existing.copyWith(thumbnailData: art));
+              }
+            }
+            // If there's no record at all, insert a minimal one now
+            if (existing == null) {
+              await dbService.upsertSong(
+                _SongRecordHelper.fromSong(song, art),
+              );
+            }
+          }
         }
         if (onBatchLoaded != null) {
           onBatchLoaded(batch);
@@ -719,4 +791,42 @@ class PlaylistProvider extends ChangeNotifier {
 
 }
 
-// Made with Bob
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+extension _SongRecordCopy on SongRecord {
+  SongRecord copyWith({
+    int? id,
+    String? title,
+    String? author,
+    String? album,
+    String? path,
+    List<String>? folderLocations,
+    List<String>? playlists,
+    Uint8List? thumbnailData,
+  }) {
+    return SongRecord(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      author: author ?? this.author,
+      album: album ?? this.album,
+      path: path ?? this.path,
+      folderLocations: folderLocations ?? this.folderLocations,
+      playlists: playlists ?? this.playlists,
+      thumbnailData: thumbnailData ?? this.thumbnailData,
+    );
+  }
+}
+
+class _SongRecordHelper {
+  static SongRecord fromSong(Song song, Uint8List? art) {
+    return SongRecord(
+      title: song.songName,
+      author: song.artistName,
+      path: song.audioPath.path,
+      folderLocations: [
+        song.audioPath.parent.path,
+      ],
+      thumbnailData: art,
+    );
+  }
+}
