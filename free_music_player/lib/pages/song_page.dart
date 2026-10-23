@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:free_music_player/components/neu_box.dart';
@@ -110,17 +112,34 @@ class SongPage extends StatelessWidget {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: value.currentSongPlaying?.albumArtImagePathBytes != null
-                                ? Image.memory(
-                                    value.currentSongPlaying!.albumArtImagePathBytes!,
+                            child: FutureBuilder<Uint8List?>(
+                              future: value.dbService
+                                  .getSongByPath(
+                                    (value.currentSongPlaying ?? songObject)
+                                        .audioPath
+                                        .path,
+                                  )
+                                  .then((record) =>
+                                      record?.thumbnailData ??
+                                      record?.thumbnailSmall ??
+                                      (value.currentSongPlaying ?? songObject)
+                                          .albumArtImagePathBytes),
+                              builder: (context, snapshot) {
+                                final artBytes = snapshot.data;
+                                if (artBytes != null) {
+                                  return Image.memory(
+                                    artBytes,
                                     width: 325,
                                     height: 250,
                                     fit: BoxFit.cover,
-                                  )
-                                : const Icon(
-                                    Icons.music_note,
-                                    size: 250,
-                                  ),
+                                  );
+                                }
+                                return const Icon(
+                                  Icons.music_note,
+                                  size: 250,
+                                );
+                              },
+                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.all(15.0),

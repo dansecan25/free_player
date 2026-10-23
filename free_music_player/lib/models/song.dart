@@ -9,10 +9,7 @@ class Song {
 
   /// Album art bytes, loaded in the background after the song list is
   /// already shown. Backed by a ValueNotifier (instead of a plain mutable
-  /// field) so that when artwork arrives, only the one widget listening to
-  /// this specific song's notifier repaints -- not the whole song list/page.
-  /// This is what lets you scroll and tap smoothly while artwork is still
-  /// streaming in for other songs.
+  /// field) so that when artwork arrives, only the one widget listening to this specific song's notifier repaints -- not the whole song list/page. This is what lets you scroll and tap smoothly while artwork is still streaming in for other songs.
   final ValueNotifier<Uint8List?> albumArtNotifier;
 
   Song({

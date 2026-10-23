@@ -195,8 +195,7 @@ class PlaylistProvider extends ChangeNotifier {
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
 
-  Song? get currentSongPlaying =>
-      _currentSongList != null && _currentSongIndex != null
+  Song? get currentSongPlaying => _currentSongList != null && _currentSongIndex != null
           ? _currentSongList![_currentSongIndex!]
           : null;
 
