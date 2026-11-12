@@ -79,11 +79,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final themeService = context.watch<ThemeService>();
     return MaterialApp(
       title: AppInfo.name,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: context.watch<ThemeService>().mode,
+      theme: AppTheme.light(themeService.accent),
+      darkTheme: AppTheme.dark(themeService.accent),
+      themeMode: themeService.mode,
       home: const HomePage(),
     );
   }

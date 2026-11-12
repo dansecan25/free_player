@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:free_music_player/components/artwork_thumbnail.dart';
 import 'package:free_music_player/components/player_controls.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:free_music_player/pages/song_page.dart';
+import 'package:free_music_player/utils/time_format.dart';
 import 'package:marquee/marquee.dart';
 import 'package:provider/provider.dart';
 
-/// Mini player at the bottom of the list screens. Tap it to open the song page.
+/// Mini player at the bottom of the list screens, with the current song's
+/// artwork filling the background. Tap it to open the song page.
 class MediaControls extends StatelessWidget {
   const MediaControls({super.key});
 
@@ -15,64 +16,121 @@ class MediaControls extends StatelessWidget {
     return Consumer<PlaylistProvider>(
       builder: (context, player, _) {
         final song = player.currentSongPlaying;
+        final artwork = player.currentArtwork;
         final scheme = Theme.of(context).colorScheme;
+        final width = MediaQuery.sizeOf(context).width * MediaQuery.devicePixelRatioOf(context);
         return Material(
-          color: scheme.surfaceContainer,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: song == null
-                        ? null
-                        : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => SongPage(songObject: song)),
-                            ),
-                    child: Row(
-                      children: [
-                        if (song != null)
-                          ArtworkThumbnail(song: song, size: 44)
-                        else
-                          const ArtworkImage(bytes: null, size: 44),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                height: 22,
-                                child: ScrollingTitle(
-                                  text: song?.songName ?? 'Nothing playing',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              Text(
-                                song?.artistName ?? 'Pick a song to start',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: scheme.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.keyboard_arrow_up, color: scheme.onSurfaceVariant),
-                      ],
-                    ),
+          color: scheme.surfaceContainerHigh,
+          child: Stack(
+            children: [
+              if (artwork != null)
+                Positioned.fill(
+                  child: Image.memory(
+                    artwork,
+                    fit: BoxFit.cover,
+                    cacheWidth: width.round(),
+                    gaplessPlayback: true,
+                    // Corrupt artwork just leaves the plain background.
+                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
                   ),
-                  PositionSlider(player: player),
-                  const SizedBox(height: 4),
-                  PlaybackButtons(player: player),
-                ],
+                ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: song == null
+                            ? null
+                            : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => SongPage(songObject: song)),
+                                ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _Chip(
+                                    child: SizedBox(
+                                      height: 24,
+                                      child: ScrollingTitle(
+                                        text: song?.songName ?? 'Nothing playing',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  _Chip(
+                                    child: Text(
+                                      song?.artistName ?? 'Pick a song to start',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const _Chip(
+                              child: Icon(Icons.keyboard_arrow_up, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _Chip(child: _time(player.currentDuration)),
+                          _Chip(child: _time(player.totalDuration)),
+                        ],
+                      ),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          inactiveTrackColor: Colors.grey.shade600,
+                        ),
+                        child: PositionSlider(player: player, showTimes: false),
+                      ),
+                      PlaybackButtons(player: player),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  static Widget _time(Duration duration) =>
+      Text(formatPlaybackTime(duration), style: const TextStyle(color: Colors.white));
+}
+
+/// Dark rounded label that keeps white text readable over any artwork.
+class _Chip extends StatelessWidget {
+  final Widget child;
+  const _Chip({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: child,
     );
   }
 }

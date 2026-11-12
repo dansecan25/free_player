@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
 
-/// Light and dark themes, built from the pink of the app icon.
+/// The theme color picked in Settings. Stored by name, so keep names stable.
+enum AppAccent {
+  /// Hair pink from the icon artwork, the default.
+  pink('Pink', Color(0xFFF4ABD5), DynamicSchemeVariant.tonalSpot),
+
+  /// The bright blue of the original player.
+  blue('Blue', Color(0xFF0F47FF), DynamicSchemeVariant.fidelity),
+  purple('Purple', Color(0xFF7C4DFF), DynamicSchemeVariant.fidelity),
+  teal('Teal', Color(0xFF00897B), DynamicSchemeVariant.fidelity),
+  orange('Orange', Color(0xFFFF6D00), DynamicSchemeVariant.fidelity),
+  red('Red', Color(0xFFD50000), DynamicSchemeVariant.fidelity);
+
+  final String label;
+  final Color seed;
+
+  /// Fidelity keeps the main color close to [seed], so a vivid color stays vivid.
+  final DynamicSchemeVariant variant;
+
+  const AppAccent(this.label, this.seed, this.variant);
+}
+
+/// Light and dark themes, built from the chosen [AppAccent].
 class AppTheme {
   AppTheme._();
 
-  /// Hair pink from the icon artwork.
-  static const Color seed = Color(0xFFF4ABD5);
+  static ThemeData light(AppAccent accent) => _build(accent, Brightness.light);
+  static ThemeData dark(AppAccent accent) => _build(accent, Brightness.dark);
 
-  static ThemeData get light => _build(Brightness.light);
-  static ThemeData get dark => _build(Brightness.dark);
-
-  static ThemeData _build(Brightness brightness) {
-    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+  static ThemeData _build(AppAccent accent, Brightness brightness) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: accent.seed,
+      brightness: brightness,
+      dynamicSchemeVariant: accent.variant,
+    );
     return ThemeData(
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,

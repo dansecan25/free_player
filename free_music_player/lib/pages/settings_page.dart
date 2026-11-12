@@ -5,6 +5,7 @@ import 'package:free_music_player/constants/app_info.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:free_music_player/services/app_update_service.dart';
 import 'package:free_music_player/services/theme_service.dart';
+import 'package:free_music_player/themes/app_theme.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -19,6 +20,7 @@ class SettingsPage extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         children: [
           const _AppearanceSection(),
+          const _ThemeColorSection(),
           const _MusicFolderSection(),
           if (AppUpdateService.isSupported) const _UpdatesSection(),
         ],
@@ -89,6 +91,85 @@ class _AppearanceSection extends StatelessWidget {
           style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ],
+    );
+  }
+}
+
+class _ThemeColorSection extends StatelessWidget {
+  const _ThemeColorSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final themeService = context.watch<ThemeService>();
+    return _Section(
+      title: 'Theme',
+      children: [
+        Text(
+          'Color of the slider, buttons and highlights.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final accent in AppAccent.values)
+              _AccentSwatch(
+                accent: accent,
+                selected: accent == themeService.accent,
+                onTap: () => themeService.setAccent(accent),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AccentSwatch extends StatelessWidget {
+  final AppAccent accent;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _AccentSwatch({required this.accent, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final onSeed = ThemeData.estimateBrightnessForColor(accent.seed) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${accent.label} theme',
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: accent.seed,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? scheme.onSurface : scheme.outlineVariant,
+                  width: selected ? 3 : 1,
+                ),
+              ),
+              child: selected ? Icon(Icons.check, color: onSeed) : null,
+            ),
+            const SizedBox(height: 4),
+            ExcludeSemantics(
+              child: Text(accent.label, style: Theme.of(context).textTheme.labelSmall),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

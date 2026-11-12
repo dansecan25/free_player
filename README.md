@@ -20,7 +20,9 @@ only network request is the check for new versions on this repository's GitHub R
 - **Artwork:** small thumbnails in lists for speed, full-size artwork on the song page. Works for
   MP3 and FLAC.
 - **Resume:** reopens the last folder playlist and song, paused where you left off.
-- **Appearance:** follows your phone's light or dark mode, or set it to always light or dark.
+- **Appearance:** follows your phone's light or dark mode, or set it to always light or dark, and
+  pick a theme color (pink, blue, purple, teal, orange or red).
+- **Mini player:** the current song's artwork fills the player bar at the bottom.
 - **Private by design:** the library database is encrypted with SQLCipher, using a key kept in the
   Android Keystore.
 - **Automatic updates:** new versions are downloaded from GitHub Releases, checked, and installed

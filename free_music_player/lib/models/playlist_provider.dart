@@ -49,6 +49,8 @@ class PlaylistProvider extends ChangeNotifier {
 
   Timer? _stateSaveTimer;
   File? _currentAlbumArtFile;
+  Uint8List? _currentArtwork;
+  String? _currentArtworkPath;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
   PlaylistProvider(this.audioHandler, {this.stateService, DatabaseService? database})
@@ -82,6 +84,15 @@ class PlaylistProvider extends ChangeNotifier {
   int get isRepeating => _isRepeat;
   Duration get currentDuration => _currentDuration;
   Duration get totalDuration => _totalDuration;
+
+  /// Full-size artwork of the current song, falling back to its thumbnail.
+  Uint8List? get currentArtwork {
+    final song = currentSongPlaying;
+    if (song == null) return null;
+    return song.path == _currentArtworkPath
+        ? _currentArtwork ?? song.albumArtImagePathBytes
+        : song.albumArtImagePathBytes;
+  }
 
   Song? get currentSongPlaying {
     final list = _currentSongList;
@@ -287,6 +298,8 @@ class PlaylistProvider extends ChangeNotifier {
   /// written to a temporary file that's replaced on every song change.
   Future<Uri?> _writeArtworkForNotification(Song song) async {
     final artwork = await dbService.getFullArtwork(song.path) ?? song.albumArtImagePathBytes;
+    _currentArtwork = artwork;
+    _currentArtworkPath = song.path;
     if (artwork == null) return null;
     final tempDir = await getTemporaryDirectory();
     final file = File(p.join(tempDir.path,
