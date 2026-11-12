@@ -8,6 +8,12 @@ A personal, offline music player for Android, built with Flutter. Point it at th
 your music lives, and every folder inside it becomes a playlist. Nothing is uploaded anywhere: the
 only network request is the check for new versions on this repository's GitHub Releases.
 
+<p align="center">
+  <img src="documentations_images/folder-playlists.jpeg" alt="Folder playlists with their song counts, and the mini player with the current song's artwork filling it" width="220" />
+  <img src="documentations_images/now-playing.jpeg" alt="Now playing page with full-size artwork, seek bar, shuffle, repeat and playback buttons" width="220" />
+  <img src="documentations_images/all-songs.jpeg" alt="All songs with thumbnails, search and the sort-order button" width="220" />
+</p>
+
 ## Features
 
 - **Folder playlists:** each sub-folder of your music folder is a playlist, sorted by name A–Z (or
@@ -27,6 +33,15 @@ only network request is the check for new versions on this repository's GitHub R
   Android Keystore.
 - **Automatic updates:** new versions are downloaded from GitHub Releases, checked, and installed
   after you confirm.
+
+<details>
+<summary>More screenshots</summary>
+
+| | | |
+|---|---|---|
+| ![Side menu](documentations_images/menu.jpeg) | ![My playlists](documentations_images/my-playlists.jpeg) | ![Settings with appearance, theme colors, music folder and app updates](documentations_images/settings.jpeg) |
+
+</details>
 
 ## Install
 
