@@ -118,7 +118,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Playlists'),
+        title: const Text('My playlists'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -153,7 +153,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                             onPressed: () => _deletePlaylist(pl),
                           ),
                         ),
-                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        const Divider(),
                       ],
                     );
                   },

@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:free_music_player/themes/dark_mode.dart';
-import 'package:free_music_player/themes/light_mode.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+/// The appearance choice: follow the device (default), or always light or dark.
 class ThemeService extends ChangeNotifier {
-  ThemeData _themeData = lightMode;
-  ThemeData get themeData => _themeData;
+  static const String _modeKey = 'theme_mode';
 
-  bool get isDarkMode => _themeData == darkMode;
+  final SharedPreferences _prefs;
+  ThemeMode _mode;
 
-  set themeData(ThemeData themeData) {
-    _themeData = themeData;
+  ThemeService(this._prefs)
+      : _mode = ThemeMode.values.asNameMap()[_prefs.getString(_modeKey)] ??
+            ThemeMode.system;
 
+  ThemeMode get mode => _mode;
+
+  Future<void> setMode(ThemeMode mode) async {
+    if (mode == _mode) return;
+    _mode = mode;
     notifyListeners();
-  }
-
-  void toggleTheme() {
-    if (_themeData == lightMode) {
-      themeData = darkMode;
-    } else {
-      themeData = lightMode;
-    }
+    await _prefs.setString(_modeKey, mode.name);
   }
 }

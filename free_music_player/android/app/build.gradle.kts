@@ -5,8 +5,34 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+/**
+ * Release signing. The private keystore lives outside the repository: its path and
+ * passwords come from ~/.gradle/gradle.properties locally, or ORG_GRADLE_PROJECT_*
+ * environment variables in CI. See "Releases" in the README.
+ */
+val releaseSigningProperties = listOf(
+    "CUMBIONSITO_UPLOAD_STORE_FILE",
+    "CUMBIONSITO_UPLOAD_KEY_ALIAS",
+    "CUMBIONSITO_UPLOAD_STORE_PASSWORD",
+    "CUMBIONSITO_UPLOAD_KEY_PASSWORD",
+)
+val hasReleaseSigning = releaseSigningProperties.all { project.hasProperty(it) }
+
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any {
+        it.project == project && it.name.matches(Regex("(assemble|bundle|package)Release"))
+    }
+    if (buildsRelease && !hasReleaseSigning) {
+        throw GradleException(
+            "Release builds need the private signing key. Set " +
+                releaseSigningProperties.joinToString(", ") +
+                " in ~/.gradle/gradle.properties (see the README)."
+        )
+    }
+}
+
 android {
-    namespace = "com.example.free_music_player"
+    namespace = "com.dansecan25.cumbionsito"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,23 +46,37 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.free_music_player"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.dansecan25.cumbionsito"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
+        // Both come from "version" in pubspec.yaml.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(project.property("CUMBIONSITO_UPLOAD_STORE_FILE") as String)
+                storePassword = project.property("CUMBIONSITO_UPLOAD_STORE_PASSWORD") as String
+                keyAlias = project.property("CUMBIONSITO_UPLOAD_KEY_ALIAS") as String
+                keyPassword = project.property("CUMBIONSITO_UPLOAD_KEY_PASSWORD") as String
+            }
         }
     }
+
+    buildTypes {
+        release {
+            // Updates only install over an app signed with the same key, so release
+            // builds never fall back to the public debug key.
+            signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else null
+        }
+    }
+}
+
+dependencies {
+    // FileProvider, used to hand downloaded updates to the package installer.
+    implementation("androidx.core:core-ktx:1.18.0") // 1.19+ needs compileSdk 37 and AGP 9
 }
 
 flutter {

@@ -1,7 +1,9 @@
 name: free_music_player
-description: "A personally created music player with no commercial interest at the moment."
+description: "Cumbionsito Player: a personal offline music player for your own music folders."
 publish_to: 'none'
-version: 0.1.1+3
+# Release tags (v1.0.0) must match the part before the +. Raise the build number after the
+# + on every release, because Android only installs updates with a higher one.
+version: 1.0.0+4
 
 environment:
   sdk: ^3.11.5
@@ -10,25 +12,21 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
   provider: ^6.1.5+1
-  file_picker: ^9.0.2
-  permission_handler: ^11.4.0
-  sqflite: ^2.4.2
+  file_picker: ^13.3.3
+  # 13.x needs compileSdk 37, which needs Android Gradle Plugin 9.
+  permission_handler: ^12.0.1
+  sqflite_sqlcipher: ^3.4.1
+  flutter_secure_storage: ^11.2.0
   path: ^1.9.1
-  audioplayers: ^6.5.0
   marquee: ^2.3.0
   just_audio: ^0.10.4
   audio_service: ^0.18.18
   audio_session: ^0.2.2
-  audio_metadata_reader: ^1.4.2
-  dart_tags: ^0.4.1
-  id3: ^1.0.2
+  audio_metadata_reader: ^1.8.1
   flutter_image_compress: ^2.3.0
   path_provider: ^2.1.5
-  shared_preferences: ^2.3.3
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:

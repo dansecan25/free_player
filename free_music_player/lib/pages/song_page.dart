@@ -1,333 +1,134 @@
 import 'dart:typed_data';
 
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
-import 'package:free_music_player/components/neu_box.dart';
+import 'package:free_music_player/components/artwork_thumbnail.dart';
+import 'package:free_music_player/components/media_controls.dart' show ScrollingTitle;
+import 'package:free_music_player/components/player_controls.dart';
+import 'package:free_music_player/components/song_actions.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
 import 'package:free_music_player/models/song.dart';
 import 'package:provider/provider.dart';
-import 'package:marquee/marquee.dart';
 
-class SongPage extends StatelessWidget {
+/// Full-screen player with the full-size artwork.
+class SongPage extends StatefulWidget {
   final Song songObject;
   const SongPage({super.key, required this.songObject});
 
-  String formatTime(Duration duration) {
-    String twoDigitSeconds = duration.inSeconds
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
-    String formattedTime = "${duration.inMinutes}:$twoDigitSeconds";
+  @override
+  State<SongPage> createState() => _SongPageState();
+}
 
-    return formattedTime;
+class _SongPageState extends State<SongPage> {
+  // The full artwork is loaded once per song, not on every position update.
+  String? _artworkPath;
+  Future<Uint8List?>? _artwork;
+
+  Future<Uint8List?> _artworkFor(PlaylistProvider player, Song song) {
+    if (_artworkPath != song.path) {
+      _artworkPath = song.path;
+      _artwork = player.dbService
+          .getFullArtwork(song.path)
+          .then((bytes) => bytes ?? song.albumArtImagePathBytes);
+    }
+    return _artwork!;
+  }
+
+  Future<void> _delete(Song song) async {
+    final deleted = await confirmAndDeleteSong(context, song);
+    if (deleted && mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlaylistProvider>(
-      builder:
-          (context, value, child) => Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            //body: Column(children: [NeuBox(child: Icon(Icons.search, size: 200))]),
-            body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25,top:100),
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    //App bar on the top
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.arrow_back),
-                        ),
+    final player = context.watch<PlaylistProvider>();
+    final song = player.currentSongPlaying ?? widget.songObject;
+    final scheme = Theme.of(context).colorScheme;
+    final activeColor = scheme.primary;
+    final idleColor = scheme.onSurfaceVariant;
 
-                        // THIS is the key fix: Expanded handles the width safely
-                        Expanded(
-                          child: SizedBox(
-                            height: 25, // enough height for Marquee
-                            child: value.currentSongPlaying!.songName.length > 25
-                                ? Marquee(
-                                    text: value.currentSongPlaying!.songName,
-                                    scrollAxis: Axis.horizontal,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    blankSpace: 20.0,
-                                    velocity: 30.0,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    pauseAfterRound: const Duration(seconds: 1),
-                                    startPadding: 10.0,
-                                    accelerationDuration: const Duration(seconds: 1),
-                                    accelerationCurve: Curves.linear,
-                                    decelerationDuration:
-                                        const Duration(milliseconds: 500),
-                                    decelerationCurve: Curves.easeOut,
-                                  )
-                                : Text(
-                                    value.currentSongPlaying!.songName,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.menu),
-                          onSelected: (value) async {
-                            if (value == 'delete') {
-                              print("todo");
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete, color: Colors.redAccent),
-                                  SizedBox(width: 8),
-                                  Text('Delete Song'),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      ],
-                    ),
-
-                    const SizedBox(height: 25),
-
-                    //Song art
-                    NeuBox(
-                      child: Column(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: FutureBuilder<Uint8List?>(
-                              future: value.dbService
-                                  .getSongByPath(
-                                    (value.currentSongPlaying ?? songObject)
-                                        .audioPath
-                                        .path,
-                                  )
-                                  .then((record) =>
-                                      record?.thumbnailData ??
-                                      record?.thumbnailSmall ??
-                                      (value.currentSongPlaying ?? songObject)
-                                          .albumArtImagePathBytes),
-                              builder: (context, snapshot) {
-                                final artBytes = snapshot.data;
-                                if (artBytes != null) {
-                                  return Image.memory(
-                                    artBytes,
-                                    width: 325,
-                                    height: 250,
-                                    fit: BoxFit.cover,
-                                  );
-                                }
-                                return const Icon(
-                                  Icons.music_note,
-                                  size: 250,
-                                );
-                              },
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(15.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Song title
-                                      SizedBox(
-                                        height: 25,
-                                        child: value.currentSongPlaying!.songName.length >
-                                                25
-                                            ? Marquee(
-                                                text: value.currentSongPlaying!.songName,
-                                                scrollAxis: Axis.horizontal,
-                                                blankSpace: 20.0,
-                                                velocity: 30.0,
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                                pauseAfterRound:
-                                                    const Duration(seconds: 1),
-                                                startPadding: 10.0,
-                                                accelerationDuration:
-                                                    const Duration(seconds: 1),
-                                                accelerationCurve: Curves.linear,
-                                                decelerationDuration:
-                                                    const Duration(milliseconds: 500),
-                                                decelerationCurve: Curves.easeOut,
-                                              )
-                                            : Text(
-                                                value.currentSongPlaying!.songName,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 20,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                      ),
-                                      // Artist name
-                                      Text(value.currentSongPlaying!.artistName),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 25), //below, the slider and timestamps
-                    Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 25.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Current position
-                              Text(formatTime(value.currentDuration)),
-
-                              IconButton(
-                                icon: Icon(
-                                  Icons.shuffle,
-                                  color: value.isShuffling
-                                      ? const Color.fromARGB(255, 25, 98, 255)
-                                      : const Color.fromARGB(255, 0, 0, 0),
-                                ),
-                                onPressed: () {
-                                  value.shuffle();
-                                },
-                              ),
-                              IconButton(
-                                icon: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Icon(
-                                      Icons.repeat,
-                                      color: value.isRepeating > 0
-                                          ? const Color.fromARGB(255, 25, 98, 255)
-                                          : const Color.fromARGB(255, 0, 0, 0),
-                                    ),
-                                    if (value.isRepeating == 2)
-                                      Positioned(
-                                        top: -4,
-                                        right: -4,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(1),
-                                          decoration: const BoxDecoration(
-                                            color:
-                                                Color.fromARGB(255, 107, 146, 255), // bg
-                                            shape: BoxShape.circle,
-                                          ),
-                                          constraints: const BoxConstraints(
-                                            minWidth: 14,
-                                            minHeight: 14,
-                                          ),
-                                          child: const Center(
-                                            child: Text(
-                                              '1',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                onPressed: () {
-                                  value.repeat();
-                                },
-                              ),
-
-                              // Total duration text
-                              Text(formatTime(value.totalDuration))
-                            ],
-                          ),
-                        ),
-                        // Slider
-                        Slider(
-                          min: 0,
-                          max: value.totalDuration.inSeconds.toDouble(),
-                          activeColor: const Color.fromARGB(255, 15, 71, 255),
-                          inactiveColor: Colors.grey.shade600,
-                          thumbColor: const Color.fromARGB(255, 44, 94, 255),
-                          value: value.currentDuration.inSeconds.toDouble(),
-                          onChanged: (s) => value.seek(Duration(seconds: s.toInt())),
-                        )
-                      ],
-                    ),
-
-                    const SizedBox(height: 10), //below, play pause skip rewind buttons
-                    Row(
-                      children: [
-                        // Previous song button
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: value.previousSong,
-                            child: const NeuBox(child: Icon(Icons.skip_previous)),
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-
-                        // Play / Pause button
-                        Expanded(
-                          flex: 2,
-                          child: StreamBuilder<PlaybackState>(
-                            stream: value.audioHandler.playbackState,
-                            builder: (context, snapshot) {
-                              final playing = snapshot.data?.playing ?? false;
-
-                              return GestureDetector(
-                                onTap: () => value.pauseOrResume(),
-                                child: NeuBox(
-                                  child: Icon(
-                                    playing ? Icons.pause : Icons.play_arrow,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-
-                        // Next song button
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: value.playNextSong,
-                            child: const NeuBox(child: Icon(Icons.skip_next)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Now playing'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Song options',
+            onSelected: (_) => _delete(song),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: scheme.error),
+                  title: const Text('Delete from device'),
                 ),
               ),
-            ),
+            ],
           ),
-
-          ),
+        ],
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final artSize = (constraints.maxWidth - 48).clamp(120.0, 420.0);
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                children: [
+                  FutureBuilder<Uint8List?>(
+                    future: _artworkFor(player, song),
+                    builder: (context, snapshot) => ArtworkImage(
+                      bytes: snapshot.data ?? song.albumArtImagePathBytes,
+                      size: artSize,
+                      radius: 24,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    height: 30,
+                    child: ScrollingTitle(
+                      text: song.songName,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      song.artistName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  PositionSlider(player: player),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        tooltip: player.isShuffling ? 'Shuffle on' : 'Shuffle off',
+                        icon: Icon(Icons.shuffle,
+                            color: player.isShuffling ? activeColor : idleColor),
+                        onPressed: player.shuffle,
+                      ),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        tooltip: const ['Repeat off', 'Repeat all', 'Repeat one'][player.isRepeating],
+                        icon: Icon(
+                          player.isRepeating == 2 ? Icons.repeat_one : Icons.repeat,
+                          color: player.isRepeating > 0 ? activeColor : idleColor,
+                        ),
+                        onPressed: player.repeat,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  PlaybackButtons(player: player),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

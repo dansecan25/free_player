@@ -1,0 +1,130 @@
+# Builds the signed Android APK and attaches it to a GitHub release.
+#
+# Runs when a version tag such as v1.0.0 is pushed. To build a tag that already
+# exists, use "Run workflow" on the Actions tab and enter the tag.
+#
+# If the tag has no release yet, this creates a draft to review and publish.
+# The app only offers updates from published releases, never from drafts.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   CUMBIONSITO_KEYSTORE_BASE64        The release keystore, base64-encoded
+#   CUMBIONSITO_UPLOAD_KEY_ALIAS       Key alias inside the keystore
+#   CUMBIONSITO_UPLOAD_STORE_PASSWORD  Keystore password
+#   CUMBIONSITO_UPLOAD_KEY_PASSWORD    Key password
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build, such as v1.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  # Keep in step with the Flutter version used locally.
+  FLUTTER_VERSION: 3.47.9
+
+jobs:
+  build:
+    name: Build signed APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: free_music_player
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Check the tag matches the version in pubspec.yaml
+        run: |
+          version=$(sed -n 's/^version: *\([^+]*\).*/\1/p' pubspec.yaml)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG doesn't match version $version in free_music_player/pubspec.yaml"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Analyze and test
+        run: |
+          flutter analyze
+          flutter test
+
+      - name: Restore the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CUMBIONSITO_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The CUMBIONSITO_KEYSTORE_BASE64 secret is missing"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+
+      - name: Build the release APK
+        env:
+          ORG_GRADLE_PROJECT_CUMBIONSITO_UPLOAD_STORE_FILE: ${{ runner.temp }}/release.jks
+          ORG_GRADLE_PROJECT_CUMBIONSITO_UPLOAD_KEY_ALIAS: ${{ secrets.CUMBIONSITO_UPLOAD_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_CUMBIONSITO_UPLOAD_STORE_PASSWORD: ${{ secrets.CUMBIONSITO_UPLOAD_STORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_CUMBIONSITO_UPLOAD_KEY_PASSWORD: ${{ secrets.CUMBIONSITO_UPLOAD_KEY_PASSWORD }}
+        run: flutter build apk --release
+
+      - name: Name the APK after the version
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            "$RUNNER_TEMP/dist/cumbionsito-player-$VERSION.apk"
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: ${{ runner.temp }}/dist/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Attach to release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: apk
+          path: dist
+
+      - name: Create the release if needed and upload
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "Cumbionsito Player ${TAG#v}" --notes ""
+          fi
+          gh release upload "$TAG" dist/*.apk --clobber

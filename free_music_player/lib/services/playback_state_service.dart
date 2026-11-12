@@ -1,107 +1,55 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Service to persist and restore playback state across app restarts
+/// Persists what was playing so it can be restored after a restart.
+///
+/// The song is stored by file path, not by list index, because indexes change
+/// when the queue is shuffled or a song is removed.
 class PlaybackStateService {
-  static const String _currentSongIndexKey = 'current_song_index';
-  static const String _currentPlaylistPathKey = 'current_playlist_path';
-  static const String _playbackPositionKey = 'playback_position';
-  static const String _isShuffleKey = 'is_shuffle';
-  static const String _isRepeatKey = 'is_repeat';
-  static const String _isSortReversedKey = 'is_sort_reversed';
+  static const String _songPathKey = 'current_song_path';
+  static const String _folderPathKey = 'current_playlist_path';
+  static const String _positionKey = 'playback_position';
+  static const String _shuffleKey = 'is_shuffle';
+  static const String _repeatKey = 'is_repeat';
+  static const String _sortReversedKey = 'is_sort_reversed';
 
   final SharedPreferences _prefs;
 
   PlaybackStateService(this._prefs);
 
-  /// Initialize the service
-  static Future<PlaybackStateService> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    return PlaybackStateService(prefs);
-  }
+  static Future<PlaybackStateService> initialize() async =>
+      PlaybackStateService(await SharedPreferences.getInstance());
 
-  /// Save current song index
-  Future<void> saveCurrentSongIndex(int? index) async {
-    if (index != null) {
-      await _prefs.setInt(_currentSongIndexKey, index);
+  SharedPreferences get preferences => _prefs;
+
+  Future<void> _setOrRemove(String key, String? value) async {
+    if (value == null || value.isEmpty) {
+      await _prefs.remove(key);
     } else {
-      await _prefs.remove(_currentSongIndexKey);
+      await _prefs.setString(key, value);
     }
   }
 
-  /// Get saved song index
-  int? getCurrentSongIndex() {
-    return _prefs.getInt(_currentSongIndexKey);
-  }
+  Future<void> saveCurrentSongPath(String? path) => _setOrRemove(_songPathKey, path);
+  String? getCurrentSongPath() => _prefs.getString(_songPathKey);
 
-  /// Save current playlist path
-  Future<void> saveCurrentPlaylistPath(String? path) async {
-    if (path != null && path.isNotEmpty) {
-      await _prefs.setString(_currentPlaylistPathKey, path);
-    } else {
-      await _prefs.remove(_currentPlaylistPathKey);
-    }
-  }
+  /// Folder playlist the queue came from. Null for queues that can't be
+  /// rebuilt from a folder (All songs, user playlists), which aren't restored.
+  Future<void> saveCurrentPlaylistPath(String? path) =>
+      _setOrRemove(_folderPathKey, path);
+  String? getCurrentPlaylistPath() => _prefs.getString(_folderPathKey);
 
-  /// Get saved playlist path
-  String? getCurrentPlaylistPath() {
-    return _prefs.getString(_currentPlaylistPathKey);
-  }
+  Future<void> savePlaybackPosition(int positionMs) =>
+      _prefs.setInt(_positionKey, positionMs);
+  int? getPlaybackPosition() => _prefs.getInt(_positionKey);
 
-  /// Save playback position in milliseconds
-  Future<void> savePlaybackPosition(int positionMs) async {
-    await _prefs.setInt(_playbackPositionKey, positionMs);
-  }
+  Future<void> saveShuffleState(bool isShuffle) => _prefs.setBool(_shuffleKey, isShuffle);
+  bool getShuffleState() => _prefs.getBool(_shuffleKey) ?? false;
 
-  /// Get saved playback position in milliseconds
-  int? getPlaybackPosition() {
-    return _prefs.getInt(_playbackPositionKey);
-  }
+  /// 0 = off, 1 = repeat all, 2 = repeat one.
+  Future<void> saveRepeatMode(int mode) => _prefs.setInt(_repeatKey, mode);
+  int getRepeatMode() => _prefs.getInt(_repeatKey) ?? 0;
 
-  /// Save shuffle state
-  Future<void> saveShuffleState(bool isShuffle) async {
-    await _prefs.setBool(_isShuffleKey, isShuffle);
-  }
-
-  /// Get saved shuffle state
-  bool getShuffleState() {
-    return _prefs.getBool(_isShuffleKey) ?? false;
-  }
-
-  /// Save repeat mode (0 = off, 1 = all, 2 = one)
-  Future<void> saveRepeatMode(int mode) async {
-    await _prefs.setInt(_isRepeatKey, mode);
-  }
-
-  /// Get saved repeat mode
-  int getRepeatMode() {
-    return _prefs.getInt(_isRepeatKey) ?? 0;
-  }
-
-  /// Save sort reversed state
-  Future<void> saveSortReversed(bool isReversed) async {
-    await _prefs.setBool(_isSortReversedKey, isReversed);
-  }
-
-  /// Get saved sort reversed state
-  bool getSortReversed() {
-    return _prefs.getBool(_isSortReversedKey) ?? false;
-  }
-
-  /// Clear all saved state
-  Future<void> clearState() async {
-    await _prefs.remove(_currentSongIndexKey);
-    await _prefs.remove(_currentPlaylistPathKey);
-    await _prefs.remove(_playbackPositionKey);
-    await _prefs.remove(_isShuffleKey);
-    await _prefs.remove(_isRepeatKey);
-    await _prefs.remove(_isSortReversedKey);
-  }
-
-  /// Check if there is saved state
-  bool hasSavedState() {
-    return _prefs.containsKey(_currentSongIndexKey) &&
-        _prefs.containsKey(_currentPlaylistPathKey);
-  }
+  Future<void> saveSortReversed(bool isReversed) =>
+      _prefs.setBool(_sortReversedKey, isReversed);
+  bool getSortReversed() => _prefs.getBool(_sortReversedKey) ?? false;
 }
-
-// Made with Bob

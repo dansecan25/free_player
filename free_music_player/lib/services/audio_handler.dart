@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:free_music_player/models/playlist_provider.dart';
@@ -10,6 +11,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   bool _isInitialized = false;
   bool _isDisposing = false;
   bool _wasPlayingBeforeInterruption = false;
+  bool _isRetryingPlay = false;
 
   AudioPlayerHandler() {
     _initializeAudioSession();
@@ -75,9 +77,9 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       });
 
       _isInitialized = true;
-      print('Audio session initialized successfully');
+      debugPrint('Audio session initialized successfully');
     } catch (e) {
-      print('Error initializing audio session: $e');
+      debugPrint('Error initializing audio session: $e');
     }
   }
 
@@ -110,7 +112,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
         speed: _player.speed,
       ));
     }, onError: (error) {
-      print('Playback event stream error: $error');
+      debugPrint('Playback event stream error: $error');
     });
   }
 
@@ -127,7 +129,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       // Small delay to ensure codec releases resources
       await Future.delayed(const Duration(milliseconds: 100));
     } catch (e) {
-      print('Error clearing audio source: $e');
+      debugPrint('Error clearing audio source: $e');
     }
   }
 
@@ -137,7 +139,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       await _clearCurrentSource();
       await _player.setAudioSource(source);
     } catch (e) {
-      print('Error setting audio source: $e');
+      debugPrint('Error setting audio source: $e');
       rethrow;
     }
   }
@@ -151,7 +153,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       }
       mediaItem.add(item); // updates Android/iOS notification & lockscreen
     } catch (e) {
-      print('Error setting media item: $e');
+      debugPrint('Error setting media item: $e');
       rethrow;
     }
   }
@@ -161,15 +163,18 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.play();
     } catch (e) {
-      print('Error playing: $e');
-      // Attempt to recover by reloading the audio source
-      if (playlistProvider != null && 
-          playlistProvider!.currentSongPlaying != null) {
-        try {
-          await playlistProvider!.play();
-        } catch (retryError) {
-          print('Error retrying play: $retryError');
-        }
+      debugPrint('Error playing: $e');
+      // Recover once by reloading the audio source. The flag stops a reload
+      // that fails again from retrying forever.
+      final provider = playlistProvider;
+      if (_isRetryingPlay || provider == null || provider.currentSongPlaying == null) return;
+      _isRetryingPlay = true;
+      try {
+        await provider.reloadCurrentSong();
+      } catch (retryError) {
+        debugPrint('Error retrying play: $retryError');
+      } finally {
+        _isRetryingPlay = false;
       }
     }
   }
@@ -179,7 +184,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.pause();
     } catch (e) {
-      print('Error pausing: $e');
+      debugPrint('Error pausing: $e');
     }
   }
 
@@ -188,7 +193,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.stop();
     } catch (e) {
-      print('Error stopping: $e');
+      debugPrint('Error stopping: $e');
     }
   }
 
@@ -207,7 +212,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await _player.seek(position);
     } catch (e) {
-      print('Error seeking: $e');
+      debugPrint('Error seeking: $e');
     }
   }
 
@@ -216,7 +221,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await playlistProvider?.playNextSong();
     } catch (e) {
-      print('Error skipping to next: $e');
+      debugPrint('Error skipping to next: $e');
     }
   }
 
@@ -225,7 +230,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     try {
       await playlistProvider?.previousSong();
     } catch (e) {
-      print('Error skipping to previous: $e');
+      debugPrint('Error skipping to previous: $e');
     }
   }
 
@@ -238,7 +243,7 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       await _player.stop();
       await _player.dispose();
     } catch (e) {
-      print('Error disposing player: $e');
+      debugPrint('Error disposing player: $e');
     }
   }
 
@@ -246,4 +251,4 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   bool get isInitialized => _isInitialized;
 }
 
-// Made with Bob
+

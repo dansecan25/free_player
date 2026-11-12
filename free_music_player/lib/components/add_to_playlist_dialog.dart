@@ -30,8 +30,8 @@ Future<void> showAddToPlaylistDialog(BuildContext context, Song song) async {
       children: playlists.map((pl) {
         return SimpleDialogOption(
           onPressed: () async {
-            await db.addSongToPlaylist(pl.id, song.audioPath.path);
-            Navigator.pop(ctx);
+            await db.addSongToPlaylist(pl.id, song.path);
+            if (ctx.mounted) Navigator.pop(ctx);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Added to "${pl.name}"')),
